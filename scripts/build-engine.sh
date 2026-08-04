@@ -34,6 +34,17 @@ fi
 if [ -n "${CC:-}" ]; then CMAKE_ARGS+=(-DCMAKE_C_COMPILER="$CC"); fi
 if [ -n "${CXX:-}" ]; then CMAKE_ARGS+=(-DCMAKE_CXX_COMPILER="$CXX"); fi
 
+# Cross builds: tell CMake the *target* CPU so AngelScript picks ARM/ARM64
+# callfunc sources (host CMAKE_SYSTEM_PROCESSOR is often still x86_64).
+case "${ARCH_TRIPLET:-${ARCH:-}}" in
+  aarch64-*|arm64)
+    CMAKE_ARGS+=(-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64)
+    ;;
+  arm-linux-gnueabihf|armhf)
+    CMAKE_ARGS+=(-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=arm)
+    ;;
+esac
+
 cmake "$ROOT/engine" "${CMAKE_ARGS[@]}"
 cmake --build . -j"$(nproc)"
 test -x "$BUILD/bin/supertuxkart"

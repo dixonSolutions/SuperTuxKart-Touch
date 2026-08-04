@@ -33,7 +33,15 @@ if (APPLE AND NOT IOS)
   endif ()
 endif ()
 
-message(STATUS "Configuring angelscript ${PROJECT_VERSION}")
+# Clickable / cross-gcc: CMAKE_SYSTEM_PROCESSOR often stays on the host (x86_64)
+# while the compiler targets arm/aarch64. Prefer the compiler triplet.
+if (CMAKE_CXX_COMPILER_TARGET MATCHES "aarch64" OR CMAKE_C_COMPILER MATCHES "aarch64")
+  set(ARCHFLAGS "aarch64")
+elseif (CMAKE_CXX_COMPILER_TARGET MATCHES "arm-linux|armv7|gnueabihf" OR CMAKE_C_COMPILER MATCHES "arm-linux-gnueabihf")
+  set(ARCHFLAGS "arm")
+endif ()
+
+message(STATUS "Configuring angelscript ${PROJECT_VERSION} (ARCHFLAGS=${ARCHFLAGS})")
 
 find_package(Threads)
 
@@ -139,7 +147,20 @@ if(MSVC AND CMAKE_CL_64 AND NOT ${BUILD_ARCH} MATCHES "(ARM64)")
     endif()
 endif()
 
-if(${ARCHFLAGS} MATCHES "^arm")
+# Check aarch64 before "^arm" — otherwise "aarch64" matches the armhf branch.
+if(${ARCHFLAGS} MATCHES "^aarch64" OR ${ARCHFLAGS} MATCHES "^arm64")
+    enable_language(ASM)
+    if(CMAKE_ASM_COMPILER_WORKS)
+        set(ANGELSCRIPT_SOURCE ${ANGELSCRIPT_SOURCE}
+            ../../source/as_callfunc_arm64.cpp
+            ../../source/as_callfunc_arm64_gcc.S)
+        message(STATUS "AngelScript: using native aarch64 callfunc")
+    else()
+        set(USE_AS_MAX_PORTABILITY 1)
+        add_definitions(-DAS_MAX_PORTABILITY)
+        message(STATUS "AngelScript: AS_MAX_PORTABILITY (no ASM for aarch64)")
+    endif()
+elseif(${ARCHFLAGS} MATCHES "^arm")
     enable_language(ASM)
     if (NOT USE_AS_MAX_PORTABILITY)
         if(CMAKE_ASM_COMPILER_WORKS)
@@ -147,15 +168,11 @@ if(${ARCHFLAGS} MATCHES "^arm")
             if (NOT APPLE)
                 set_property(SOURCE ../../source/as_callfunc_arm_gcc.S APPEND PROPERTY COMPILE_FLAGS " -Wa,-mimplicit-it=always")
             endif()
+            message(STATUS "AngelScript: using native arm callfunc")
         else()
-            message(FATAL ERROR "ARM target requires a working assembler")
+            message(FATAL_ERROR "ARM target requires a working assembler")
         endif()
     endif()
-endif()
-
-if(${ARCHFLAGS} MATCHES "^aarch64")
-    enable_language(ASM)
-    ADD_DEFINITIONS(-DAS_MAX_PORTABILITY)
 endif()
 
 if(MSVC)
