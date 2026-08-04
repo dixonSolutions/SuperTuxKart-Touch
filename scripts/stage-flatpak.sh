@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Stage Flatpak install tree (slim: binary + engine data/gui; tracks from Flathub).
+# Uses cp (not rsync) so it works inside the Freedesktop Sdk.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="${DESTDIR:-/app}"
@@ -18,17 +19,23 @@ mkdir -p "$DEST/bin" "$DEST/data" \
 install -m 755 "$BIN" "$DEST/bin/supertuxkart"
 install -m 755 "$ROOT/packaging/start.sh" "$DEST/bin/start.sh"
 
-# Slim data: gui (with glass), shaders, skins, po, ttf, sfx stubs from engine/data
-# Exclude huge track/kart blobs — discovered from Flathub STK at runtime.
-rsync -a --delete \
-  --exclude 'tracks/' \
-  --exclude 'karts/' \
-  --exclude 'library/' \
-  --exclude 'models/' \
-  --exclude 'music/' \
-  --exclude 'textures/' \
-  --exclude '.git/' \
-  "$ROOT/engine/data/" "$DEST/data/"
+# Slim data: copy engine/data trees except huge asset dirs (tracks/karts from Flathub).
+SRC_DATA="$ROOT/engine/data"
+EXCLUDE='tracks|karts|library|models|music|textures|\.git'
+shopt -s nullglob dotglob
+for entry in "$SRC_DATA"/*; do
+  base="$(basename "$entry")"
+  if [[ "$base" =~ ^($EXCLUDE)$ ]]; then
+    continue
+  fi
+  if [[ -d "$entry" ]]; then
+    mkdir -p "$DEST/data/$base"
+    cp -a "$entry"/. "$DEST/data/$base/"
+  else
+    cp -a "$entry" "$DEST/data/"
+  fi
+done
+shopt -u nullglob dotglob
 
 # Ensure glass icons present
 mkdir -p "$DEST/data/gui/icons/android"
