@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: build-and-publish-${{ github.ref }}
-  cancel-in-progress: false
+  # Cancel stale runs so Click/OpenStore fixes are not stuck behind long Flatpak jobs.
+  cancel-in-progress: true
 
 env:
   FLATPAK_APP_ID: io.github.dixonSolutions.SuperTuxKartTouch
@@ -213,12 +214,13 @@ jobs:
   openstore:
     name: OpenStore upload
     needs: [version, click]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Upload to OpenStore
+      - name: Upload revisions + publish
         env:
           OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
           CLICK_NAME: ${{ env.CLICK_NAME }}
@@ -226,13 +228,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${OPENSTORE_API_KEY:-}" ]; then
-            echo "OPENSTORE_API_KEY secret is missing — skip OpenStore upload."
-            exit 0
+            echo "OPENSTORE_API_KEY secret is missing — cannot publish to OpenStore." >&2
+            exit 1
           fi
           REVISION_CHANGELOG="SuperTuxKart Touch ${VERSION}: glass HUD, thermal profile, packaging."
           mapfile -t CLICKS < <(find artifacts/click-arm64 artifacts/click-armhf -name '*.click' -type f | sort)
-          if [ "${#CLICKS[@]}" -lt 1 ]; then
-            echo "No click artifacts for OpenStore" >&2
+          if [ "${#CLICKS[@]}" -lt 2 ]; then
+            echo "Expected arm64 + armhf .click artifacts, found ${#CLICKS[@]}" >&2
+            find artifacts -type f | head -50 >&2 || true
             exit 1
           fi
           for f in "${CLICKS[@]}"; do
@@ -248,10 +251,18 @@ jobs:
             )"
             echo "HTTP ${http_code}"
             cat /tmp/openstore-resp.json || true
+            python3 -c 'import json,sys; d=json.load(open("/tmp/openstore-resp.json")); sys.exit(0 if d.get("success") else 1)' \
+              || { echo "OpenStore revision rejected for $f" >&2; exit 1; }
             if [ "$http_code" != "200" ]; then
-              echo "OpenStore upload failed for $f — create https://open-store.io/submit with id ${CLICK_NAME} once, then re-run." >&2
-              # Do not fail the whole pipeline before the store listing exists.
-              exit 0
+              echo "OpenStore upload failed for $f" >&2
+              exit 1
             fi
           done
-          echo "Mark Published=Yes on https://open-store.io/manage/${CLICK_NAME} after review."
+          # Flip Published=Yes once revisions exist (listing + screenshots already set).
+          curl -sS -o /tmp/openstore-pub.json -w 'publish HTTP %{http_code}\n' -X PUT \
+            -F "published=true" \
+            -F "changelog=${REVISION_CHANGELOG}" \
+            "https://open-store.io/api/v3/manage/${CLICK_NAME}?apikey=${OPENSTORE_API_KEY}"
+          cat /tmp/openstore-pub.json || true
+          python3 -c 'import json,sys; d=json.load(open("/tmp/openstore-pub.json")); sys.exit(0 if d.get("success") and d.get("data",{}).get("published") else 1)'
+          echo "OpenStore published: https://open-store.io/app/${CLICK_NAME}"

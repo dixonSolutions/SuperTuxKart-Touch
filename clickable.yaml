@@ -27,10 +27,12 @@ dependencies_target:
   - libopenal-dev
   - libvorbis-dev
   - libogg-dev
-  - libbluetooth-dev
   - libsqlite3-dev
   - libgles2-mesa-dev
   - libegl1-mesa-dev
+  - libgl1-mesa-dev
 
 # Clickable runs this from build_dir — use SRC_DIR (project root).
 build: bash $SRC_DIR/scripts/clickable-build.sh
+# Skip host packaging of system libs that break confinement review.
+install_lib: []
