@@ -1,44 +1,53 @@
-#!/usr/bin/env bash
-# Build Ubuntu Touch .click (invoked inside Clickable image or locally).
-set -euo pipefail
+#!/bin/bash
+# Invoked from clickable.yaml. Keep free of nested shell quoting —
+# Clickable runs the YAML build: block through shlex.split.
+set -eux
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CLICK_NAME="${CLICK_NAME:-$(cat "$ROOT/click/.ci-name" 2>/dev/null || echo supertuxkarttouch.dixonsolutions)}"
-CLICK_VERSION="${CLICK_VERSION:-$(cat "$ROOT/click/.ci-version" 2>/dev/null || echo 1.0.0)}"
-CLICK_FRAMEWORK="${CLICK_FRAMEWORK:-$(cat "$ROOT/click/.ci-framework" 2>/dev/null || echo ubuntu-touch-24.04-1.x)}"
-ARCH="${ARCH:-${CLICKABLE_ARCH:-arm64}}"
-case "$ARCH" in
-  arm64|aarch64) CLICK_ARCH=arm64; TRIPLET=aarch64-linux-gnu ;;
-  armhf) CLICK_ARCH=armhf; TRIPLET=arm-linux-gnueabihf ;;
-  amd64|x86_64) CLICK_ARCH=amd64; TRIPLET=x86_64-linux-gnu ;;
-  *) CLICK_ARCH=$ARCH; TRIPLET="${ARCH}-linux-gnu" ;;
+cd "$ROOT"
+
+if [ -f click/.ci-name ]; then
+    CLICK_NAME="$(tr -d '\n' < click/.ci-name)"
+    export CLICK_NAME
+fi
+if [ -f click/.ci-version ]; then
+    CLICK_VERSION="$(tr -d '\n' < click/.ci-version)"
+    export CLICK_VERSION
+fi
+if [ -f click/.ci-framework ]; then
+    CLICK_FRAMEWORK="$(tr -d '\n' < click/.ci-framework)"
+    export CLICK_FRAMEWORK
+fi
+
+export CLICK_NAME="${CLICK_NAME:-supertuxkarttouch.dixonsolutions}"
+export CLICK_VERSION="${CLICK_VERSION:-1.0.0}"
+export CLICK_FRAMEWORK="${CLICK_FRAMEWORK:-ubuntu-touch-24.04-1.x}"
+
+# Clickable sets ARCH / ARCH_TRIPLET / INSTALL_DIR in the container.
+CLICKABLE_ARCH="${ARCH:-}"
+export CLICK_ARCH="${CLICKABLE_ARCH}"
+export DEST="${INSTALL_DIR:?INSTALL_DIR must be set by Clickable}"
+
+case "${CLICKABLE_ARCH}" in
+    arm64)
+        export ARCH=arm64
+        export ARCH_TRIPLET="${ARCH_TRIPLET:-aarch64-linux-gnu}"
+        ;;
+    armhf)
+        export ARCH=armhf
+        export ARCH_TRIPLET="${ARCH_TRIPLET:-arm-linux-gnueabihf}"
+        ;;
+    amd64)
+        unset ARCH ARCH_TRIPLET || true
+        ;;
+    *)
+        echo "Unsupported Clickable ARCH: ${CLICKABLE_ARCH}" >&2
+        exit 1
+        ;;
 esac
 
-bash "$ROOT/scripts/build-engine.sh"
-
-STAGE="$ROOT/build-click/${CLICK_NAME}"
-rm -rf "$STAGE"
-mkdir -p "$STAGE/bin" "$STAGE/share/icons" "$STAGE/data"
-
-install -m 755 "$ROOT/engine/build/bin/supertuxkart" "$STAGE/bin/supertuxkart"
-install -m 755 "$ROOT/packaging/start.sh" "$STAGE/bin/start.sh"
-rsync -a --exclude 'tracks/' --exclude 'karts/' --exclude 'library/' \
-  --exclude 'models/' --exclude 'music/' --exclude 'textures/' \
-  "$ROOT/engine/data/" "$STAGE/data/"
-cp -f "$ROOT/engine/data/supertuxkart_256.png" "$STAGE/share/icons/supertuxkart.png"
-
-sed -e "s/@CLICK_NAME@/${CLICK_NAME}/g" \
-    -e "s/@CLICK_VERSION@/${CLICK_VERSION}/g" \
-    -e "s/@CLICK_FRAMEWORK@/${CLICK_FRAMEWORK}/g" \
-    -e "s/@CLICK_ARCH@/${CLICK_ARCH}/g" \
-    "$ROOT/click/manifest.json.in" > "$STAGE/manifest.json"
-cp "$ROOT/click/supertuxkart.desktop" "$STAGE/"
-cp "$ROOT/click/supertuxkart.apparmor" "$STAGE/"
-
-# click package
-if command -v click >/dev/null; then
-  (cd "$(dirname "$STAGE")" && click build "$(basename "$STAGE")")
-  find "$(dirname "$STAGE")" -maxdepth 1 -name '*.click' -exec mv {} "$ROOT/" \;
-  echo "Built click in $ROOT"
-else
-  echo "click tool not found — staged tree at $STAGE (CI image provides click)" >&2
-fi
+# Build engine into a clean tree (host engine/build may be wrong arch).
+export STK_BUILD_DIR="${ROOT}/engine/cmake-build-click"
+bash scripts/build-engine.sh
+bash scripts/stage-click.sh
+export ARCH="${CLICKABLE_ARCH}"

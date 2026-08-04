@@ -1,9 +1,36 @@
-clickable_minimum_required: 8.0.0
+clickable_minimum_required: '8.0.0'
 builder: custom
 framework: ubuntu-touch-24.04-1.x
 kill: supertuxkart
-build: |
-  bash scripts/clickable-build.sh
-install_lib:
-  - /usr/lib/${ARCH_TRIPLET}/lib*.so*
 ignore_review_errors: true
+
+dependencies_host:
+  - build-essential
+  - cmake
+  - ninja-build
+  - pkg-config
+  - git
+  - curl
+  - unzip
+  - file
+  - python3
+
+dependencies_target:
+  - libsdl2-dev
+  - libsdl2-image-dev
+  - libjpeg-dev
+  - zlib1g-dev
+  - libpng-dev
+  - libfreetype6-dev
+  - libharfbuzz-dev
+  - libcurl4-openssl-dev
+  - libopenal-dev
+  - libvorbis-dev
+  - libogg-dev
+  - libbluetooth-dev
+  - libsqlite3-dev
+  - libgles2-mesa-dev
+  - libegl1-mesa-dev
+
+# Clickable runs this from build_dir — use SRC_DIR (project root).
+build: bash $SRC_DIR/scripts/clickable-build.sh

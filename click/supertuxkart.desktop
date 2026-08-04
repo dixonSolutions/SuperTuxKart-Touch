@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=SuperTuxKart Touch
 Exec=bin/start.sh
-Icon=share/icons/supertuxkart.png
+Icon=supertuxkart.png
 Terminal=false
 Type=Application
 X-Ubuntu-Touch=true
