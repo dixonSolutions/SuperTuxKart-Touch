@@ -42,7 +42,8 @@ jobs:
     needs: [version]
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      # Builder image tracks Flathub CI; runtime/SDK come from the manifest (25.08).
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
       options: --privileged
     strategy:
       fail-fast: false
@@ -212,7 +213,6 @@ jobs:
   openstore:
     name: OpenStore upload
     needs: [version, click]
-    if: ${{ secrets.OPENSTORE_API_KEY != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -221,14 +221,20 @@ jobs:
       - name: Upload to OpenStore
         env:
           OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
+          CLICK_NAME: ${{ env.CLICK_NAME }}
         run: |
           set -euo pipefail
+          if [ -z "${OPENSTORE_API_KEY:-}" ]; then
+            echo "OPENSTORE_API_KEY secret is missing — skip OpenStore upload."
+            exit 0
+          fi
           VER="${{ needs.version.outputs.version }}"
           for arch in arm64 armhf; do
             CLICK="artifacts/click-${arch}/SuperTuxKartTouch-${VER}-${arch}.click"
+            test -f "$CLICK"
             curl -fsSL -X PUT \
               -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
               -F "file=@${CLICK}" \
-              "https://open-store.io/api/v3/apps/${{ env.CLICK_NAME }}/revision/" \
-              || echo "OpenStore upload failed for ${arch} (app may need creating first)"
+              "https://open-store.io/api/v3/apps/${CLICK_NAME}/revision/" \
+              || echo "OpenStore upload failed for ${arch} (create app ${CLICK_NAME} first)"
           done
