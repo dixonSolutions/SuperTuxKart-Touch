@@ -39,4 +39,11 @@ STK_TOUCH_PERF=quality  flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 
 ## Click / OpenStore
 
-CI builds arm64 + armhf `.click` on each `main` push. OpenStore upload runs when `OPENSTORE_API_KEY` is set. Create the OpenStore listing once with id `supertuxkarttouch.dixonsolutions`.
+CI builds arm64 + armhf `.click` on each `main` push. OpenStore upload uses repo secret `OPENSTORE_API_KEY` (same key as Xonotic-Touch).
+
+**One-time:** create the listing at [open-store.io/submit](https://open-store.io/submit) with id exactly `supertuxkarttouch.dixonsolutions`, then mark **Published = Yes** after the first CI revision passes review.
+
+| | |
+|--|--|
+| Manage | https://open-store.io/manage/supertuxkarttouch.dixonsolutions |
+| Public | https://open-store.io/app/supertuxkarttouch.dixonsolutions |

@@ -9,7 +9,7 @@ Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phon
 | **Assets** | Slim package — reuses Flathub `net.supertuxkart.SuperTuxKart` tracks/karts |
 
 <p align="center">
-  <img src="docs/media/race-glass-hud.png" width="720" alt="Glass touch HUD in a race" />
+  <img src="docs/media/glass-hud-race.jpg" width="720" alt="Glass touch HUD in a race (Flatpak on tablet)" />
 </p>
 
 ## Install (Flatpak)

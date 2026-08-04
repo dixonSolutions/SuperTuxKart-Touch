@@ -222,19 +222,36 @@ jobs:
         env:
           OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
           CLICK_NAME: ${{ env.CLICK_NAME }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
           if [ -z "${OPENSTORE_API_KEY:-}" ]; then
             echo "OPENSTORE_API_KEY secret is missing — skip OpenStore upload."
             exit 0
           fi
-          VER="${{ needs.version.outputs.version }}"
-          for arch in arm64 armhf; do
-            CLICK="artifacts/click-${arch}/SuperTuxKartTouch-${VER}-${arch}.click"
-            test -f "$CLICK"
-            curl -fsSL -X PUT \
-              -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
-              -F "file=@${CLICK}" \
-              "https://open-store.io/api/v3/apps/${CLICK_NAME}/revision/" \
-              || echo "OpenStore upload failed for ${arch} (create app ${CLICK_NAME} first)"
+          REVISION_CHANGELOG="SuperTuxKart Touch ${VERSION}: glass HUD, thermal profile, packaging."
+          mapfile -t CLICKS < <(find artifacts/click-arm64 artifacts/click-armhf -name '*.click' -type f | sort)
+          if [ "${#CLICKS[@]}" -lt 1 ]; then
+            echo "No click artifacts for OpenStore" >&2
+            exit 1
+          fi
+          for f in "${CLICKS[@]}"; do
+            echo "Publishing $(basename "$f") → OpenStore ${CLICK_NAME}..."
+            http_code="$(
+              curl -sS -o /tmp/openstore-resp.json -w '%{http_code}' \
+                --connect-timeout 30 --max-time 900 \
+                -X POST \
+                -F "file=@${f}" \
+                -F "channel=focal" \
+                -F "changelog=${REVISION_CHANGELOG}" \
+                "https://open-store.io/api/v3/manage/${CLICK_NAME}/revision?apikey=${OPENSTORE_API_KEY}"
+            )"
+            echo "HTTP ${http_code}"
+            cat /tmp/openstore-resp.json || true
+            if [ "$http_code" != "200" ]; then
+              echo "OpenStore upload failed for $f — create https://open-store.io/submit with id ${CLICK_NAME} once, then re-run." >&2
+              # Do not fail the whole pipeline before the store listing exists.
+              exit 0
+            fi
           done
+          echo "Mark Published=Yes on https://open-store.io/manage/${CLICK_NAME} after review."

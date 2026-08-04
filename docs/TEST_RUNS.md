@@ -27,7 +27,7 @@ Verified:
 | CPU in race | ~**17%** (was revving before thermal profile) |
 | Power profile | `power-saver` via launcher |
 
-Media: `docs/media/main-menu.png`, `docs/media/glass-hud-race.png`.
+Media: `docs/media/main-menu.jpg`, `docs/media/glass-hud-race.jpg`.
 
 ### Click / OpenStore / Pages remote
 
