@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.dixonSolutions.SuperTuxKartTouch</id>
+  <name>SuperTuxKart Touch</name>
+  <summary>Touch-first SuperTuxKart for Linux tablets and phones</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0+</project_license>
+  <developer_name>dixonSolutions</developer_name>
+  <url type="homepage">https://github.com/dixonSolutions/SuperTuxKart-Touch</url>
+  <url type="bugtracker">https://github.com/dixonSolutions/SuperTuxKart-Touch/issues</url>
+  <description>
+    <p>
+      SuperTuxKart Touch is a tablet-first build of SuperTuxKart with a glass
+      virtual stick, drift / item / nitro buttons, touch settings, and an
+      in-game screen keyboard. Defaults favour thermal headroom on fanless
+      devices (30 FPS, reduced RTTs, lights/shadows off).
+    </p>
+    <p>
+      The Flatpak ships the touch engine and UI. Race assets (tracks and karts)
+      are reused from a system Flathub SuperTuxKart install when available,
+      keeping this package slim.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.dixonSolutions.SuperTuxKartTouch.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/dixonSolutions/SuperTuxKart-Touch/main/docs/media/race-glass-hud.png</image>
+      <caption>Glass touch HUD in a race</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/dixonSolutions/SuperTuxKart-Touch/main/docs/media/screen-keyboard.png</image>
+      <caption>In-game screen keyboard</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="1.0.0" date="2026-08-04"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Game</category>
+    <category>ArcadeGame</category>
+  </categories>
+</component>

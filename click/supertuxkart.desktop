@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=SuperTuxKart Touch
+Exec=bin/start.sh
+Icon=share/icons/supertuxkart.png
+Terminal=false
+Type=Application
+X-Ubuntu-Touch=true
+X-Ubuntu-Default-Department-ID=games
+X-Ubuntu-Supported-Orientations=landscape

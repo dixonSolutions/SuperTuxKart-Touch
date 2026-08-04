@@ -1,0 +1,16 @@
+engine/build/
+engine/cmake-build-flatpak/
+build-flatpak/
+build-flatpak-prebuilt/
+build-click/
+.flatpak-builder/
+*.click
+*.flatpak
+.cache/
+*.o
+*.a
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+.DS_Store
+click/.ci-*

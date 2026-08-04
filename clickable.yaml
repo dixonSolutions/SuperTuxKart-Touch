@@ -1,0 +1,9 @@
+clickable_minimum_required: 8.0.0
+builder: custom
+framework: ubuntu-touch-24.04-1.x
+kill: supertuxkart
+build: |
+  bash scripts/clickable-build.sh
+install_lib:
+  - /usr/lib/${ARCH_TRIPLET}/lib*.so*
+ignore_review_errors: true

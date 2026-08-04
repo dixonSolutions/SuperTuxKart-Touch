@@ -1,0 +1,15 @@
+{
+  "name": "@CLICK_NAME@",
+  "title": "SuperTuxKart Touch",
+  "version": "@CLICK_VERSION@",
+  "maintainer": "dixonSolutions <hello@dixonsolutions.dev>",
+  "framework": "@CLICK_FRAMEWORK@",
+  "architecture": "@CLICK_ARCH@",
+  "description": "Touch-first SuperTuxKart with glass controls for Ubuntu Touch. Slim package; reuse/download game assets.",
+  "hooks": {
+    "supertuxkart": {
+      "apparmor": "supertuxkart.apparmor",
+      "desktop": "supertuxkart.desktop"
+    }
+  }
+}

@@ -1,0 +1,234 @@
+name: Build and publish
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build-and-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLATPAK_APP_ID: io.github.dixonSolutions.SuperTuxKartTouch
+  FLATPAK_REMOTE_NAME: supertuxkart-touch
+  FLATPAK_REMOTE_URL: https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
+  CLICK_NAME: supertuxkarttouch.dixonsolutions
+  CLICK_FRAMEWORK: ubuntu-touch-24.04-1.x
+  CLICK_REMOTE_URL: https://dixonSolutions.github.io/SuperTuxKart-Touch/click
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.stamp.outputs.version }}
+      tag: ${{ steps.stamp.outputs.tag }}
+    steps:
+      - name: Compute version
+        id: stamp
+        run: |
+          VERSION="1.0.${{ github.run_number }}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    needs: [version]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install Docker for QEMU
+        if: matrix.arch != 'x86_64'
+        run: |
+          curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.0.0.tgz \
+            --output ./docker.tgz
+          tar xzf docker.tgz
+          mv docker/* /usr/bin
+
+      - name: Set up QEMU
+        if: matrix.arch != 'x86_64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Stamp metainfo version
+        run: |
+          sed -i "s/version=\"1.0.0\"/version=\"${{ needs.version.outputs.version }}\"/" \
+            flatpak/io.github.dixonSolutions.SuperTuxKartTouch.metainfo.xml
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: SuperTuxKartTouch-${{ needs.version.outputs.version }}-${{ matrix.arch }}.flatpak
+          manifest-path: flatpak/io.github.dixonSolutions.SuperTuxKartTouch.yml
+          arch: ${{ matrix.arch }}
+          keep-build-dirs: true
+          cache-key: stk-touch-${{ matrix.arch }}-v1-${{ hashFiles('flatpak/*.yml', 'scripts/**', 'packaging/**', 'engine/CMakeLists.txt') }}
+          restore-cache: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-${{ matrix.arch }}
+          path: SuperTuxKartTouch-${{ needs.version.outputs.version }}-${{ matrix.arch }}.flatpak
+
+  click:
+    name: Click (${{ matrix.arch }})
+    needs: [version]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, armhf]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Click package
+        uses: tuxecure/clickable@v2
+        with:
+          image: clickable/ci-ut24.04-1.x-${{ matrix.arch }}
+          run: |
+            printf '%s\n' "${{ needs.version.outputs.version }}" > click/.ci-version
+            printf '%s\n' "${{ env.CLICK_NAME }}" > click/.ci-name
+            printf '%s\n' "${{ env.CLICK_FRAMEWORK }}" > click/.ci-framework
+            clickable build --arch ${{ matrix.arch }} --skip-review --verbose
+
+      - name: Collect Click artifact
+        run: |
+          mkdir -p click-out
+          mapfile -t clicks < <(find . -name '*.click' -type f | head -20)
+          if [ "${#clicks[@]}" -eq 0 ]; then
+            echo "No .click artifact produced" >&2
+            exit 1
+          fi
+          cp "${clicks[0]}" "click-out/SuperTuxKartTouch-${{ needs.version.outputs.version }}-${{ matrix.arch }}.click"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: click-${{ matrix.arch }}
+          path: click-out/*.click
+
+  publish-pages:
+    name: Publish Pages remotes
+    needs: [version, flatpak, click]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Install Flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak ostree appstream-util
+
+      - name: Assemble Flatpak + Click remotes
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.version }}"
+          mkdir -p public/flatpak public/click
+          # OSTree repo
+          ostree init --mode=archive-z2 --repo=public/flatpak
+          for arch in x86_64 aarch64; do
+            BUNDLE="artifacts/flatpak-${arch}/SuperTuxKartTouch-${VER}-${arch}.flatpak"
+            test -f "$BUNDLE"
+            flatpak build-import-bundle --update-appstream public/flatpak "$BUNDLE"
+          done
+          # Click latest pointers
+          for arch in arm64 armhf; do
+            SRC="artifacts/click-${arch}/SuperTuxKartTouch-${VER}-${arch}.click"
+            test -f "$SRC"
+            cp "$SRC" "public/click/SuperTuxKartTouch-${VER}-${arch}.click"
+            cp "$SRC" "public/click/latest-${arch}.click"
+          done
+          cat > public/click/index.html <<EOF
+          <!doctype html><title>SuperTuxKart Touch Click</title>
+          <h1>SuperTuxKart Touch Click packages</h1>
+          <ul>
+            <li><a href="latest-arm64.click">latest-arm64.click</a></li>
+            <li><a href="latest-armhf.click">latest-armhf.click</a></li>
+          </ul>
+          EOF
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          force_orphan: false
+
+  release:
+    name: GitHub Release
+    needs: [version, flatpak, click]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: SuperTuxKart Touch ${{ needs.version.outputs.version }}
+          files: |
+            artifacts/flatpak-x86_64/*
+            artifacts/flatpak-aarch64/*
+            artifacts/click-arm64/*
+            artifacts/click-armhf/*
+          body: |
+            ## SuperTuxKart Touch ${{ needs.version.outputs.version }}
+
+            ### Flatpak
+            ```bash
+            flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxkart-touch \
+              https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
+            flatpak install --user supertuxkart-touch io.github.dixonSolutions.SuperTuxKartTouch
+            ```
+            Requires Flathub `net.supertuxkart.SuperTuxKart` for race assets (tracks/karts).
+
+            ### Click (Ubuntu Touch)
+            - OpenStore (when published), or
+            - https://dixonSolutions.github.io/SuperTuxKart-Touch/click/latest-arm64.click
+
+  openstore:
+    name: OpenStore upload
+    needs: [version, click]
+    if: ${{ secrets.OPENSTORE_API_KEY != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Upload to OpenStore
+        env:
+          OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
+        run: |
+          set -euo pipefail
+          VER="${{ needs.version.outputs.version }}"
+          for arch in arm64 armhf; do
+            CLICK="artifacts/click-${arch}/SuperTuxKartTouch-${VER}-${arch}.click"
+            curl -fsSL -X PUT \
+              -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
+              -F "file=@${CLICK}" \
+              "https://open-store.io/api/v3/apps/${{ env.CLICK_NAME }}/revision/" \
+              || echo "OpenStore upload failed for ${arch} (app may need creating first)"
+          done
