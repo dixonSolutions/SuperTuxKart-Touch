@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>SuperTuxTouch packages</title></head>
+<body>
+<h1>SuperTuxTouch packages</h1>
+<p>Touch port — separate from Flathub SuperTuxKart (<code>net.supertuxkart.SuperTuxKart</code>).</p>
+<ul>
+  <li><a href="flatpak/">Flatpak remote</a> (<code>supertuxtouch</code>)</li>
+  <li><a href="click/">Ubuntu Touch .click</a></li>
+  <li><a href="https://github.com/dixonSolutions/SuperTuxKart-Touch/releases/latest">GitHub Releases</a></li>
+</ul>
+<pre>
+flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxtouch \
+  https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
+flatpak install --user supertuxtouch io.github.dixonSolutions.SuperTuxKartTouch
+</pre>
+</body></html>
