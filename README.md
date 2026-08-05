@@ -1,30 +1,38 @@
-# SuperTuxKart Touch
+# SuperTuxTouch
 
-Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phones. Glass virtual stick, drift / item / nitro buttons, touch settings, and an in-game screen keyboard. Defaults favour **thermal** headroom on fanless devices (30 FPS, reduced render scale).
+Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phones (**not** the Flathub `net.supertuxkart.SuperTuxKart` app). Glass virtual stick, drift / item / nitro buttons, touch settings, and an in-game screen keyboard. Defaults favour **thermal** headroom on fanless devices (30 FPS, reduced render scale).
 
 | | |
 |---|---|
-| **Install** | Flatpak remote, Ubuntu Touch `.click` / OpenStore, GitHub Releases |
+| **Name** | SuperTuxTouch |
+| **Flatpak id** | `io.github.dixonSolutions.SuperTuxKartTouch` |
+| **Flatpak remote** | `supertuxtouch` |
+| **Install** | Flatpak remote, offline `.flatpak` on Releases, Ubuntu Touch `.click` / OpenStore |
 | **Platforms** | Flatpak: `x86_64` + `aarch64`. Click: `arm64` + `armhf` |
-| **Assets** | Slim package — reuses Flathub `net.supertuxkart.SuperTuxKart` tracks/karts |
+| **Assets** | Slim package — reuses Flathub STK tracks/karts when installed |
 
 <p align="center">
   <img src="docs/media/glass-hud-race.jpg" width="720" alt="Glass touch HUD in a race (Flatpak on tablet)" />
 </p>
 
-## Install (Flatpak)
+## Install (Flatpak remote)
 
 ```bash
-# Race assets (once)
+# Race assets (once) — stock STK stays on Flathub; this remote is separate
 flatpak install -y flathub net.supertuxkart.SuperTuxKart
 
-flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxkart-touch \
+flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxtouch \
   https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
-flatpak install --user supertuxkart-touch io.github.dixonSolutions.SuperTuxKartTouch
+flatpak install --user supertuxtouch io.github.dixonSolutions.SuperTuxKartTouch
 flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 ```
 
-Or grab bundles from [GitHub Releases](https://github.com/dixonSolutions/SuperTuxKart-Touch/releases/latest).
+Offline bundles (same app id) are attached to every [GitHub Release](https://github.com/dixonSolutions/SuperTuxKart-Touch/releases/latest):
+
+```bash
+flatpak install --user SuperTuxKartTouch-*-x86_64.flatpak
+```
+
 
 ### Ubuntu Touch (.click)
 

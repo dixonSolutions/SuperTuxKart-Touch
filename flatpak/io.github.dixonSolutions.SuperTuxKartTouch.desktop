@@ -1,12 +1,12 @@
 [Desktop Entry]
-Name=SuperTuxKart Touch
+Name=SuperTuxTouch
 GenericName=Touch kart racer
-Comment=Touch-first SuperTuxKart for Linux tablets
+Comment=Touch-first SuperTuxKart for Linux tablets (not the Flathub SuperTuxKart)
 Exec=start.sh
 Icon=io.github.dixonSolutions.SuperTuxKartTouch
 Terminal=false
 Type=Application
 Categories=Game;ArcadeGame;
-Keywords=racing;kart;touch;tablet;
+Keywords=racing;kart;touch;tablet;SuperTuxTouch;supertuxtouch;SuperTuxKart Touch;
 StartupNotify=true
 X-Purism-FormFactor=Workstation;Mobile;

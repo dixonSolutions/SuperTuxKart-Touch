@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_ID="${FLATPAK_APP_ID:-io.github.dixonSolutions.SuperTuxKartTouch}"
-REMOTE_NAME="${FLATPAK_REMOTE_NAME:-supertuxkart-touch}"
+REMOTE_NAME="${FLATPAK_REMOTE_NAME:-supertuxtouch}"
 REMOTE_URL="${FLATPAK_REMOTE_URL:-https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak}"
 MANIFEST="${FLATPAK_MANIFEST:-flatpak/io.github.dixonSolutions.SuperTuxKartTouch.yml}"
 BUILD_DIR="${FLATPAK_BUILD_DIR:-build-flatpak}"

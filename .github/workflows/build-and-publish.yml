@@ -17,7 +17,8 @@ concurrency:
 
 env:
   FLATPAK_APP_ID: io.github.dixonSolutions.SuperTuxKartTouch
-  FLATPAK_REMOTE_NAME: supertuxkart-touch
+  # Distinct from Flathub "flathub" / net.supertuxkart.SuperTuxKart — touch keyword in remote name.
+  FLATPAK_REMOTE_NAME: supertuxtouch
   FLATPAK_REMOTE_URL: https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
   CLICK_NAME: supertuxkarttouch.dixonsolutions
   CLICK_FRAMEWORK: ubuntu-touch-24.04-1.x
@@ -128,9 +129,13 @@ jobs:
           path: click-out/*.click
 
   publish-pages:
-    name: Publish Pages remotes
+    name: Publish Pages (Flatpak + Click remotes)
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     needs: [version, flatpak, click]
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -138,78 +143,132 @@ jobs:
         with:
           path: artifacts
 
-      - name: Install Flatpak tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak ostree appstream-util
-
-      - name: Assemble Flatpak + Click remotes
+      - name: Build Flatpak OSTree + Click download remote
+        env:
+          PACKAGE_VERSION: ${{ needs.version.outputs.version }}
+          FLATPAK_REMOTE_URL: ${{ env.FLATPAK_REMOTE_URL }}
+          FLATPAK_REMOTE_NAME: ${{ env.FLATPAK_REMOTE_NAME }}
+          FLATPAK_APP_ID: ${{ env.FLATPAK_APP_ID }}
+          CLICK_REMOTE_URL: ${{ env.CLICK_REMOTE_URL }}
+          CLICK_NAME: ${{ env.CLICK_NAME }}
+          PRUNE_DEPTH: '40'
         run: |
           set -euo pipefail
-          VER="${{ needs.version.outputs.version }}"
-          mkdir -p public/flatpak public/click
-          # OSTree repo
-          ostree init --mode=archive-z2 --repo=public/flatpak
-          for arch in x86_64 aarch64; do
-            BUNDLE="artifacts/flatpak-${arch}/SuperTuxKartTouch-${VER}-${arch}.flatpak"
-            test -f "$BUNDLE"
-            flatpak build-import-bundle --update-appstream public/flatpak "$BUNDLE"
-          done
-          # Click latest pointers
-          for arch in arm64 armhf; do
-            SRC="artifacts/click-${arch}/SuperTuxKartTouch-${VER}-${arch}.click"
-            test -f "$SRC"
-            cp "$SRC" "public/click/SuperTuxKartTouch-${VER}-${arch}.click"
-            cp "$SRC" "public/click/latest-${arch}.click"
-          done
-          cat > public/click/index.html <<EOF
-          <!doctype html><title>SuperTuxKart Touch Click</title>
-          <h1>SuperTuxKart Touch Click packages</h1>
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flatpak ostree
+          chmod +x scripts/publish-flatpak-remote.sh scripts/publish-click-remote.sh
+          mkdir -p site
+          X86_BUNDLE="$(find artifacts/flatpak-x86_64 -name '*.flatpak' | head -1)"
+          A64_BUNDLE="$(find artifacts/flatpak-aarch64 -name '*.flatpak' | head -1)"
+          ARM64_CLICK="$(find artifacts/click-arm64 -name '*.click' | head -1)"
+          ARMHF_CLICK="$(find artifacts/click-armhf -name '*.click' | head -1)"
+          test -n "$X86_BUNDLE" || { echo "Missing x86_64 flatpak" >&2; exit 1; }
+          test -n "$A64_BUNDLE" || { echo "Missing aarch64 flatpak" >&2; exit 1; }
+          test -n "$ARM64_CLICK" || { echo "Missing arm64 click" >&2; exit 1; }
+          test -n "$ARMHF_CLICK" || { echo "Missing armhf click" >&2; exit 1; }
+          bash scripts/publish-flatpak-remote.sh \
+            --x86 "$X86_BUNDLE" \
+            --aarch64 "$A64_BUNDLE" \
+            --version "$PACKAGE_VERSION"
+          bash scripts/publish-click-remote.sh \
+            --arm64 "$ARM64_CLICK" \
+            --armhf "$ARMHF_CLICK" \
+            --version "$PACKAGE_VERSION"
+          cat > site/index.html <<EOF
+          <!DOCTYPE html>
+          <html lang="en"><head><meta charset="utf-8"><title>SuperTuxTouch packages</title></head>
+          <body>
+          <h1>SuperTuxTouch packages</h1>
+          <p>Touch port — separate from Flathub SuperTuxKart (<code>net.supertuxkart.SuperTuxKart</code>).</p>
           <ul>
-            <li><a href="latest-arm64.click">latest-arm64.click</a></li>
-            <li><a href="latest-armhf.click">latest-armhf.click</a></li>
+            <li><a href="flatpak/">Flatpak remote</a> (<code>supertuxtouch</code> — x86_64 + aarch64)</li>
+            <li><a href="click/">Ubuntu Touch .click</a> (arm64 + armhf)</li>
+            <li><a href="https://github.com/dixonSolutions/SuperTuxKart-Touch/releases/latest">GitHub Releases</a> (offline .flatpak + .click)</li>
           </ul>
+          <p>Build ${PACKAGE_VERSION}</p>
+          </body></html>
           EOF
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          force_orphan: false
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   release:
     name: GitHub Release
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     needs: [version, flatpak, click]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
-      - name: Create release
+          path: release
+
+      - name: Prepare release files + notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          FLATPAK_REMOTE_NAME: ${{ env.FLATPAK_REMOTE_NAME }}
+          FLATPAK_REMOTE_URL: ${{ env.FLATPAK_REMOTE_URL }}
+          FLATPAK_APP_ID: ${{ env.FLATPAK_APP_ID }}
+        run: |
+          mkdir -p release/upload
+          cp release/flatpak-x86_64/*.flatpak release/upload/
+          cp release/flatpak-aarch64/*.flatpak release/upload/
+          cp release/click-arm64/*.click release/upload/
+          cp release/click-armhf/*.click release/upload/
+          ls -la release/upload/
+          {
+            echo "## SuperTuxTouch ${VERSION}"
+            echo
+            echo "Touch-first SuperTuxKart — **not** Flathub \`net.supertuxkart.SuperTuxKart\`."
+            echo "App id: \`${FLATPAK_APP_ID}\`. Flatpak remote: \`${FLATPAK_REMOTE_NAME}\`."
+            echo
+            echo "### Flatpak remote (recommended)"
+            echo '```bash'
+            echo "flatpak install -y flathub net.supertuxkart.SuperTuxKart   # assets once"
+            echo "flatpak remote-add --user --if-not-exists --no-gpg-verify ${FLATPAK_REMOTE_NAME} \\"
+            echo "  ${FLATPAK_REMOTE_URL}"
+            echo "flatpak install --user ${FLATPAK_REMOTE_NAME} ${FLATPAK_APP_ID}"
+            echo "flatpak run ${FLATPAK_APP_ID}"
+            echo '```'
+            echo
+            echo "### Offline Flatpak bundles (this release)"
+            echo '```bash'
+            echo "flatpak install --user SuperTuxKartTouch-${VERSION}-x86_64.flatpak"
+            echo "# or: SuperTuxKartTouch-${VERSION}-aarch64.flatpak"
+            echo '```'
+            echo
+            echo "### Ubuntu Touch (.click)"
+            echo
+            echo '<a href="https://open-store.io/app/supertuxkarttouch.dixonsolutions"><img src="https://open-store.io/badges/en_US.svg" alt="OpenStore" width="200" /></a>'
+            echo
+            echo "- https://dixonSolutions.github.io/SuperTuxKart-Touch/click/latest-arm64.click"
+            echo "- https://dixonSolutions.github.io/SuperTuxKart-Touch/click/latest-armhf.click"
+            echo
+            echo "Commit: \`${GITHUB_SHA}\`"
+          } > release/notes.md
+
+      - name: Create versioned GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          name: SuperTuxKart Touch ${{ needs.version.outputs.version }}
-          files: |
-            artifacts/flatpak-x86_64/*
-            artifacts/flatpak-aarch64/*
-            artifacts/click-arm64/*
-            artifacts/click-armhf/*
-          body: |
-            ## SuperTuxKart Touch ${{ needs.version.outputs.version }}
-
-            ### Flatpak
-            ```bash
-            flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxkart-touch \
-              https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
-            flatpak install --user supertuxkart-touch io.github.dixonSolutions.SuperTuxKartTouch
-            ```
-            Requires Flathub `net.supertuxkart.SuperTuxKart` for race assets (tracks/karts).
-
-            ### Click (Ubuntu Touch)
-            - OpenStore (when published), or
-            - https://dixonSolutions.github.io/SuperTuxKart-Touch/click/latest-arm64.click
+          name: SuperTuxTouch ${{ needs.version.outputs.version }}
+          body_path: release/notes.md
+          files: release/upload/*
+          fail_on_unmatched_files: true
+          make_latest: true
+          target_commitish: ${{ github.sha }}
 
   openstore:
     name: OpenStore upload

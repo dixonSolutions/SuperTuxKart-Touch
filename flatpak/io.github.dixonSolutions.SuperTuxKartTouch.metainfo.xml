@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>io.github.dixonSolutions.SuperTuxKartTouch</id>
-  <name>SuperTuxKart Touch</name>
-  <summary>Touch-first SuperTuxKart for Linux tablets and phones</summary>
+  <name>SuperTuxTouch</name>
+  <summary>Touch-first SuperTuxKart for Linux tablets and phones (separate from Flathub SuperTuxKart)</summary>
+  <keywords>
+    <keyword>touch</keyword>
+    <keyword>tablet</keyword>
+    <keyword>SuperTuxTouch</keyword>
+    <keyword>supertuxtouch</keyword>
+    <keyword>kart</keyword>
+    <keyword>racing</keyword>
+  </keywords>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0+</project_license>
   <developer_name>dixonSolutions</developer_name>
@@ -24,11 +32,11 @@
   <launchable type="desktop-id">io.github.dixonSolutions.SuperTuxKartTouch.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/dixonSolutions/SuperTuxKart-Touch/main/docs/media/race-glass-hud.png</image>
+      <image>https://raw.githubusercontent.com/dixonSolutions/SuperTuxKart-Touch/main/docs/media/glass-hud-race.jpg</image>
       <caption>Glass touch HUD in a race</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/dixonSolutions/SuperTuxKart-Touch/main/docs/media/screen-keyboard.png</image>
+      <image>https://raw.githubusercontent.com/dixonSolutions/SuperTuxKart-Touch/main/docs/media/screen-keyboard.jpg</image>
       <caption>In-game screen keyboard</caption>
     </screenshot>
   </screenshots>
