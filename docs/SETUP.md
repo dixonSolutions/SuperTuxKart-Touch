@@ -8,7 +8,7 @@ New project (`SuperTuxKart-Touch`), not shared runtime code with Xonotic-Touch. 
 
 | Flag | Purpose |
 |------|---------|
-| `-DTOUCH_STK=ON` | Defines `TOUCH_STK` + `MOBILE_STK`; glass HUD; touch defaults |
+| `-DTOUCH_STK=ON` | Defines `TOUCH_STK` (not `MOBILE_STK` on Linux); glass HUD; touch defaults |
 | `-DCHECK_ASSETS=off` | Allow compile without full `stk-assets` tree next to `engine/` |
 | `-DNO_SHADERC=on` | Skip Vulkan shaderc dependency |
 | `-DBUILD_RECORDER=off` | Skip openglrecorder |
@@ -18,8 +18,11 @@ New project (`SuperTuxKart-Touch`), not shared runtime code with Xonotic-Touch. 
 Point at Flatpak data (or svn `stk-assets`):
 
 ```bash
-FLATPAK_DATA=$(find /var/lib/flatpak/app/net.supertuxkart.SuperTuxKart \
-  -path '*/files/share/supertuxkart/data/tracks' -type d | head -1 | xargs dirname)
+# System or --user Flathub STK (tablets often use the user install):
+FLATPAK_DATA=$(find \
+  "$HOME/.local/share/flatpak/app/net.supertuxkart.SuperTuxKart" \
+  /var/lib/flatpak/app/net.supertuxkart.SuperTuxKart \
+  -path '*/files/share/supertuxkart/data/tracks' -type d 2>/dev/null | head -1 | xargs dirname)
 
 # Prefer running from a prefix that shares that data tree, or symlink:
 ln -sfn "$FLATPAK_DATA/.." ~/SuperTuxKart-Touch/share-supertuxkart

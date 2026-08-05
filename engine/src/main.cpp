@@ -278,6 +278,10 @@ extern "C" {
 #include "states_screens/options/user_screen.hpp"
 #include "states_screens/dialogs/init_android_dialog.hpp"
 #include "states_screens/dialogs/message_dialog.hpp"
+#ifdef MOBILE_STK
+#include "states_screens/dialogs/download_assets.hpp"
+#include "utils/extract_mobile_assets.hpp"
+#endif
 #include "tips/tips_manager.hpp"
 #include "tracks/arena_graph.hpp"
 #include "tracks/track.hpp"
@@ -2492,6 +2496,13 @@ int main(int argc, char *argv[])
                 }
             }
             #endif
+#ifdef MOBILE_STK
+            // Slim Click packages: prompt once for full tracks/karts/textures.
+            if (!ExtractMobileAssets::hasFullAssets())
+            {
+                GUIEngine::DialogQueue::get()->pushDialog(new DownloadAssets());
+            }
+#endif
 
             class DriverDialog :
                   public MessageDialog::IConfirmDialogListener

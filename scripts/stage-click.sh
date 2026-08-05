@@ -79,6 +79,12 @@ mkdir -p "$DEST/data/gui/icons/android"
 cp -f "$ROOT/engine/data/gui/icons/android"/glass_*.png "$DEST/data/gui/icons/android/" 2>/dev/null || true
 printf 'SuperTuxKart Touch\n' > "$DEST/data/supertuxkart.git"
 
+# MOBILE_STK discoverPaths requires these dirs in the package; real content
+# comes from the in-engine download (~/.local/share/supertuxkart-touch/stk-assets/).
+for stub in tracks karts library models music sfx textures; do
+  mkdir -p "$DEST/data/$stub"
+done
+
 copy_shared_libs "$DEST/bin/supertuxkart" "$DEST/lib"
 
 ICON_SRC="$ROOT/engine/data/supertuxkart_256.png"

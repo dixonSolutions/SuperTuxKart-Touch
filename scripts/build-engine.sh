@@ -25,9 +25,12 @@ CMAKE_ARGS=(
   -DCMAKE_INSTALL_PREFIX=/usr
 )
 
-# Ubuntu Touch / Clickable: GLES2 renderer (no desktop GL).
+# Ubuntu Touch / Clickable: GLES2 renderer (no desktop GL) + in-engine assets.
 if [ -n "${INSTALL_DIR:-}" ] || [ "${STK_USE_GLES2:-}" = "1" ]; then
   CMAKE_ARGS+=(-DUSE_GLES2=on)
+fi
+if [ -n "${INSTALL_DIR:-}" ] || [ "${STK_MOBILE_ASSETS:-}" = "1" ]; then
+  CMAKE_ARGS+=(-DTOUCH_STK_MOBILE_ASSETS=ON)
 fi
 
 # Clickable / cross: honour toolchain compilers when set.

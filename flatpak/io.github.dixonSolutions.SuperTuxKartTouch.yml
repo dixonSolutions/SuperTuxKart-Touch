@@ -13,10 +13,12 @@ finish-args:
   - --device=dri
   - --filesystem=xdg-data/supertuxkart-touch:create
   - --filesystem=xdg-config/supertuxkart:create
-  # Reuse Flathub STK assets (tracks/karts) when present — keeps our package slim.
+  # Reuse Flathub STK assets (tracks/karts) — system *and* user installs (tablets often use --user).
   - --filesystem=/var/lib/flatpak/app/net.supertuxkart.SuperTuxKart:ro
+  - --filesystem=xdg-data/flatpak/app/net.supertuxkart.SuperTuxKart:ro
   - --talk-name=org.freedesktop.UPower
   - --talk-name=org.freedesktop.Flatpak
+  - --talk-name=org.freedesktop.portal.Desktop
 
 build-options:
   cflags: -O2

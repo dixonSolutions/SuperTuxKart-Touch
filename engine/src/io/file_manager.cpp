@@ -228,11 +228,14 @@ FileManager::FileManager()
 
     std::string assets_dir;
 #ifdef MOBILE_STK
-    m_stk_assets_download_dir = getenv("HOME");
+    m_stk_assets_download_dir = getenv("HOME") ? getenv("HOME") : ".";
 #ifdef IOS_STK
     m_stk_assets_download_dir += "/Library/Application Support/SuperTuxKart/stk-assets/";
 #elif defined (ANDROID)
     m_stk_assets_download_dir += "/stk-assets/";
+#elif defined (TOUCH_STK)
+    // Ubuntu Touch / Linux tablet Click: writable user data (AppArmor home).
+    m_stk_assets_download_dir += "/.local/share/supertuxkart-touch/stk-assets/";
 #else
 #error You must set m_stk_assets_download_dir to appropriate place for your platform
 #endif

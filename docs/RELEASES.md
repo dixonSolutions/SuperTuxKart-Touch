@@ -13,19 +13,22 @@ Distribution model matches Xonotic-Touch: Flatpak OSTree remote + offline bundle
 | Click latest | https://dixonSolutions.github.io/SuperTuxKart-Touch/click/latest-arm64.click |
 | OpenStore | https://open-store.io/app/supertuxkarttouch.dixonsolutions |
 
-## Flatpak install (remote)
+## Quick install
+
+[![OpenStore](https://open-store.io/badges/en_US.svg)](https://open-store.io/app/supertuxkarttouch.dixonsolutions)
 
 ```bash
-# Once: Flathub STK for tracks/karts (optional but recommended)
-flatpak install -y flathub net.supertuxkart.SuperTuxKart
-
+# Flatpak remote (Linux tablets)
+flatpak install -y flathub net.supertuxkart.SuperTuxKart   # assets — required
 flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxtouch \
   https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
-flatpak install --user supertuxtouch io.github.dixonSolutions.SuperTuxKartTouch
+flatpak install --user -y supertuxtouch io.github.dixonSolutions.SuperTuxKartTouch
 flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 ```
 
-Search / listing keywords include `touch` and `SuperTuxTouch` so this does not replace or collide with `net.supertuxkart.SuperTuxKart`.
+Remote name `supertuxtouch` and app id `…SuperTuxKartTouch` stay separate from Flathub `net.supertuxkart.SuperTuxKart`.
+
+**Won’t start?** Install Flathub STK (system or `--user`). User installs need the Touch Flatpak that allows `xdg-data/flatpak/app/net.supertuxkart.SuperTuxKart` (1.0.9+).
 
 ## Flatpak offline (GitHub Release)
 
@@ -51,6 +54,10 @@ STK_TOUCH_PERF=quality  flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 ## Click / OpenStore
 
 CI builds arm64 + armhf `.click` on each `main` push and uploads revisions when `OPENSTORE_API_KEY` is set.
+
+Slim Click packages use the upstream **MOBILE_STK** asset download on first launch
+(`stk-assets.zip` → `~/.local/share/supertuxkart-touch/stk-assets/`). The launcher
+avoids `/usr/bin/dirname` (AppArmor denial on Ubuntu Touch).
 
 | | |
 |--|--|

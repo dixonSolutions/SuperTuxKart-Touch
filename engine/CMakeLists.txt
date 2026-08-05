@@ -80,12 +80,17 @@ if(APPLE AND NOT IOS)
 endif()
 
 # Linux tablet / phone touch port (SuperTuxKart-Touch).
-# Do NOT define MOBILE_STK here — that enables Android/iOS asset-download
-# paths which #error on desktop Linux. Touch defaults use TOUCH_STK only.
+# Flatpak: TOUCH_STK only (reuse Flathub STK assets via start.sh).
+# Click/phone: also TOUCH_STK_MOBILE_ASSETS → MOBILE_STK download dialog.
 option(TOUCH_STK "Build SuperTuxKart Touch (tablet-first multitouch defaults)" ON)
+option(TOUCH_STK_MOBILE_ASSETS "Enable MOBILE_STK in-engine asset download (Click)" OFF)
 if(TOUCH_STK AND NOT ANDROID AND NOT IOS)
     ADD_DEFINITIONS(-DTOUCH_STK)
     message(STATUS "SuperTuxKart Touch build enabled (TOUCH_STK)")
+    if(TOUCH_STK_MOBILE_ASSETS)
+        ADD_DEFINITIONS(-DMOBILE_STK)
+        message(STATUS "SuperTuxKart Touch mobile asset download enabled (MOBILE_STK)")
+    endif()
 endif()
 
 if (IOS)
