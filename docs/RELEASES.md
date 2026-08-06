@@ -30,6 +30,11 @@ Remote name `supertuxtouch` and app id `…SuperTuxKartTouch` stay separate from
 
 **Won’t start?** Install Flathub STK (system or `--user`). User installs need the Touch Flatpak that allows `xdg-data/flatpak/app/net.supertuxkart.SuperTuxKart` (1.0.9+).
 
+## CI
+
+`Build and publish` builds Flatpak natively — `ubuntu-24.04` for x86_64 and
+`ubuntu-24.04-arm` for aarch64 (no QEMU). Click/OpenStore jobs do not wait on Flatpak.
+
 ## Flatpak offline (GitHub Release)
 
 Each release attaches:
@@ -57,7 +62,10 @@ CI builds arm64 + armhf `.click` on each `main` push and uploads revisions when 
 
 Slim Click packages use the upstream **MOBILE_STK** asset download on first launch
 (`stk-assets.zip` → `~/.local/share/supertuxkart-touch/stk-assets/`). The launcher
-avoids `/usr/bin/dirname` (AppArmor denial on Ubuntu Touch).
+uses shell builtins only under AppArmor (no host `dirname` / `mkdir` / `xrandr`) and
+detects Click via `supertuxkart.apparmor` / `.supertuxkart-touch-click` (installed
+trees do not keep `manifest.json` in the data dir). See
+[UBUNTU_TOUCH_LAUNCH.md](UBUNTU_TOUCH_LAUNCH.md).
 
 | | |
 |--|--|

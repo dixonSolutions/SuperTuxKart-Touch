@@ -21,9 +21,38 @@ resolve_click_arch() {
   esac
 }
 
+# Skip glibc/loader; ship everything else the ELF NEEDED list references.
+skip_system_lib() {
+  case "$1" in
+    ld-linux*.so*|libc.so*|libm.so*|libdl.so*|libpthread.so*|librt.so*|libresolv.so*|libgcc_s.so*|libstdc++.so*)
+      return 0 ;;
+  esac
+  return 1
+}
+
+find_target_lib() {
+  local base="$1" triplet="${ARCH_TRIPLET:-}" candidate
+  for candidate in \
+      ${triplet:+/usr/lib/$triplet/$base} \
+      ${triplet:+/lib/$triplet/$base} \
+      /usr/lib/$base \
+      /lib/$base \
+      /usr/lib/*/"$base" \
+      /lib/*/"$base"
+  do
+    # shellcheck disable=SC2086
+    for f in $candidate; do
+      [ -f "$f" ] || continue
+      printf '%s\n' "$f"
+      return 0
+    done
+  done
+  return 1
+}
+
 copy_shared_libs() {
   local binary="$1" lib_dir="$2"
-  local list seen_file lib base dest current
+  local list seen_file lib base dest current needed
   list="$(mktemp)"
   seen_file="$(mktemp)"
   printf '%s\n' "$binary" > "$list"
@@ -32,14 +61,27 @@ copy_shared_libs() {
     sed -i '1d' "$list"
     grep -Fxq "$current" "$seen_file" 2>/dev/null && continue
     printf '%s\n' "$current" >> "$seen_file"
+
+    # Prefer ldd (native builds). Cross builds often get nothing from ldd — fall
+    # back to readelf NEEDED + ARCH_TRIPLET sysroot paths inside Clickable.
+    needed="$(mktemp)"
+    if ldd "$current" >/dev/null 2>&1; then
+      ldd "$current" 2>/dev/null | awk '/=> \// {print $3}' > "$needed"
+    elif command -v readelf >/dev/null 2>&1; then
+      readelf -d "$current" 2>/dev/null \
+        | awk '/NEEDED/ { gsub(/[\[\]]/,"",$5); print $5 }' > "$needed"
+    fi
+
     while IFS= read -r lib; do
       case "$lib" in ''|linux-vdso.so.*) continue ;; esac
-      [ -f "$lib" ] || continue
-      base="$(basename "$lib")"
-      case "$base" in
-        ld-linux*.so*|libc.so*|libm.so*|libdl.so*|libpthread.so*|librt.so*|libresolv.so*|libgcc_s.so*|libstdc++.so*)
-          continue ;;
-      esac
+      if [ -f "$lib" ]; then
+        base="$(basename "$lib")"
+      else
+        base="$lib"
+        lib="$(find_target_lib "$base" || true)"
+        [ -n "$lib" ] && [ -f "$lib" ] || continue
+      fi
+      skip_system_lib "$base" && continue
       dest="$lib_dir/$base"
       if [ ! -f "$dest" ]; then
         install -m 755 "$lib" "$dest"
@@ -47,9 +89,13 @@ copy_shared_libs() {
       if ! grep -Fxq "$lib" "$seen_file" 2>/dev/null; then
         printf '%s\n' "$lib" >> "$list"
       fi
-    done < <(ldd "$current" 2>/dev/null | awk '/=> \// {print $3}')
+    done < "$needed"
+    rm -f "$needed"
   done
   rm -f "$list" "$seen_file"
+  local count
+  count="$(find "$lib_dir" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  echo "Staged $count shared libraries into $lib_dir"
 }
 
 CLICK_ARCH="$(resolve_click_arch)"
@@ -60,6 +106,8 @@ mkdir -p "$DEST/bin" "$DEST/lib" "$DEST/data" "$DEST/share/icons"
 
 install -m 755 "$BIN" "$DEST/bin/supertuxkart"
 install -m 755 "$ROOT/packaging/start.sh" "$DEST/bin/start.sh"
+# Sentinel for start.sh — installed clicks do not keep manifest.json in the data tree.
+: > "$DEST/.supertuxkart-touch-click"
 
 # Slim data (cp — no rsync in Clickable images)
 EXCLUDE='tracks|karts|library|models|music|textures|\.git'

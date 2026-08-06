@@ -42,7 +42,8 @@ jobs:
   flatpak:
     name: Flatpak (${{ matrix.arch }})
     needs: [version]
-    runs-on: ubuntu-latest
+    # Native runners — aarch64 under QEMU on x86 was ~4h; ubuntu-24.04-arm is ~15m.
+    runs-on: ${{ matrix.runner }}
     container:
       # Builder image tracks Flathub CI; runtime/SDK come from the manifest (25.08).
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
@@ -50,26 +51,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 1
-
-      - name: Install Docker for QEMU
-        if: matrix.arch != 'x86_64'
-        run: |
-          curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.0.0.tgz \
-            --output ./docker.tgz
-          tar xzf docker.tgz
-          mv docker/* /usr/bin
-
-      - name: Set up QEMU
-        if: matrix.arch != 'x86_64'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Stamp metainfo version
         run: |
@@ -83,7 +74,7 @@ jobs:
           manifest-path: flatpak/io.github.dixonSolutions.SuperTuxKartTouch.yml
           arch: ${{ matrix.arch }}
           keep-build-dirs: true
-          cache-key: stk-touch-${{ matrix.arch }}-v1-${{ hashFiles('flatpak/*.yml', 'scripts/**', 'packaging/**', 'engine/CMakeLists.txt') }}
+          cache-key: stk-touch-${{ matrix.arch }}-v2-${{ hashFiles('flatpak/*.yml', 'scripts/**', 'packaging/**', 'engine/CMakeLists.txt') }}
           restore-cache: true
 
       - uses: actions/upload-artifact@v4
