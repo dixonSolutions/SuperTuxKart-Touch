@@ -69,7 +69,9 @@ The first-launch wizard is pushed when `!ExtractMobileAssets::hasFullAssets()`
 and there are no **official** (non-addon) tracks. Addon tracks alone must not
 suppress it. The dialog is queued with `from_queue=true` so `loadFromFile` runs
 from `DialogQueue::update` — loading in the constructor breaks the queue
-contract and segfaults during skin draw.
+contract and segfaults during skin draw. When the download finishes, Touch
+aborts the main loop and `execv`s `/proc/self/exe` so music and tracks load on
+a clean relaunch (in-process `sameRestart` is not enough).
 
 ## Config
 

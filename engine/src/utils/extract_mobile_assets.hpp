@@ -28,7 +28,9 @@ bool hasFullAssets();
 bool extract(const std::string& zip_file, const std::string& dst);
 void reinit();
 void uninstall();
-} // namespace FileUtils
+/** True once after a successful download/uninstall asked main() to re-exec. */
+bool consumeRelaunchRequest();
+} // namespace ExtractMobileAssets
 
 #endif
 

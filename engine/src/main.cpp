@@ -2269,6 +2269,14 @@ int main(int argc, char *argv[])
 #endif
 #endif
   
+#if defined(MOBILE_STK) && defined(TOUCH_STK) && !defined(ANDROID) && !defined(IOS_STK)
+    // Keep the original argv for re-exec after the asset download wizard finishes.
+    static int relaunch_argc = 0;
+    static char** relaunch_argv = NULL;
+    relaunch_argc = argc;
+    relaunch_argv = argv;
+#endif
+
     clearGlobalVariables();
     CommandLine::init(argc, argv);
 
@@ -2734,6 +2742,29 @@ int main(int argc, char *argv[])
 #endif
 
     Log::flushBuffers();
+
+#if defined(MOBILE_STK) && defined(TOUCH_STK) && !defined(ANDROID) && !defined(IOS_STK)
+    // After a successful asset download the soft in-process reload is not
+    // enough (music/tracks were missing at boot). Re-exec so the next launch
+    // loads the full tree. Must happen before we close stdio / delete managers.
+    if (ExtractMobileAssets::consumeRelaunchRequest() && relaunch_argv)
+    {
+        char exe_path[4096];
+        const ssize_t n = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+        if (n > 0)
+        {
+            exe_path[n] = '\0';
+            Log::info("main", "Relaunching after asset download: %s", exe_path);
+            Log::flushBuffers();
+            execv(exe_path, relaunch_argv);
+            Log::error("main", "Relaunch failed (%s) — exiting.", strerror(errno));
+        }
+        else
+        {
+            Log::error("main", "Could not resolve /proc/self/exe for relaunch.");
+        }
+    }
+#endif
 
 #ifndef WIN32
     if (user_config) //close logfiles

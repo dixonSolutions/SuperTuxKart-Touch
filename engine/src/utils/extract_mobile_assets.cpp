@@ -19,13 +19,20 @@
 
 #include "utils/extract_mobile_assets.hpp"
 #include "addons/zip.hpp"
+#include "config/user_config.hpp"
 #include "io/file_manager.hpp"
 #include "graphics/irr_driver.hpp"
+#include "main_loop.hpp"
 #include "race/grand_prix_manager.hpp"
 #include "replay/replay_play.hpp"
 #include "tracks/track_manager.hpp"
 #include "utils/constants.hpp"
 #include "utils/log.hpp"
+
+namespace
+{
+bool g_relaunch_requested = false;
+}  // namespace
 
 // ----------------------------------------------------------------------------
 bool ExtractMobileAssets::hasFullAssets()
@@ -67,9 +74,32 @@ bool ExtractMobileAssets::extract(const std::string& zip_file,
 }   // extract
 
 // ----------------------------------------------------------------------------
+bool ExtractMobileAssets::consumeRelaunchRequest()
+{
+    const bool requested = g_relaunch_requested;
+    g_relaunch_requested = false;
+    return requested;
+}   // consumeRelaunchRequest
+
+// ----------------------------------------------------------------------------
 void ExtractMobileAssets::reinit()
 {
     file_manager->reinitAfterDownloadAssets();
+
+#if defined(TOUCH_STK) && !defined(ANDROID) && !defined(IOS_STK)
+    // A soft graphics restart cannot pick up music/tracks that were absent at
+    // boot. Save config, leave the main loop, and let main() re-exec the
+    // process so the next launch loads the full asset tree.
+    if (user_config)
+        user_config->saveConfig();
+    g_relaunch_requested = true;
+    Log::info("ExtractMobileAssets",
+              "Assets updated — restarting SuperTuxKart Touch.");
+    if (main_loop)
+        main_loop->requestAbort();
+    return;
+#endif
+
     irr_driver->sameRestart();
     track_manager->loadTrackList();
     // Update the replay file list to use latest track pointer
