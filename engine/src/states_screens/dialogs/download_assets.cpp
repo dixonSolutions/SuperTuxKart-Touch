@@ -83,10 +83,29 @@ public:
 };   // DownloadAssetsRequest
 
 // ----------------------------------------------------------------------------
-/** Creates a modal dialog with given percentage of screen width and height
-*/
-DownloadAssets::DownloadAssets()
+/** Creates a modal dialog with given percentage of screen width and height.
+ *  \param from_queue When true, loadFromFile is deferred until DialogQueue
+ *         calls load(). DialogQueue requires !isInited() at push time — loading
+ *         in the constructor both trips that contract and leaves a half-shown
+ *         dialog that segfaults during Skin::process3DPane.
+ */
+DownloadAssets::DownloadAssets(bool from_queue)
               : ModalDialog(0.8f, 0.8f)
+{
+    m_progress = NULL;
+    m_install_button = NULL;
+    if (!from_queue)
+        load();
+}   // DownloadAssets
+
+// ----------------------------------------------------------------------------
+DownloadAssets::~DownloadAssets()
+{
+    stopDownload();
+}   // ~DownloadAssets
+
+// ----------------------------------------------------------------------------
+void DownloadAssets::load()
 {
     loadFromFile("addons_loading.stkgui");
     m_install_button   = getWidget<IconButtonWidget> ("install" );
@@ -128,13 +147,7 @@ DownloadAssets::DownloadAssets()
     }
 #endif
     getWidget<BubbleWidget>("description")->setText(msg);
-}   // DownloadAssets
-
-// ----------------------------------------------------------------------------
-DownloadAssets::~DownloadAssets()
-{
-    stopDownload();
-}   // ~DownloadAssets
+}   // load
 
 // ----------------------------------------------------------------------------
 void DownloadAssets::beforeAddingWidgets()
@@ -151,7 +164,8 @@ void DownloadAssets::init()
 // ----------------------------------------------------------------------------
 bool DownloadAssets::onEscapePressed()
 {
-    ModalDialog::dismiss();
+    // Return true so StateManager::escapePressed calls dismiss() once.
+    // Calling dismiss() here as well double-deletes the dialog.
     return true;
 }   // onEscapePressed
 

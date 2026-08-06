@@ -44,12 +44,15 @@ private:
     std::shared_ptr<DownloadAssetsRequest> m_download_request;
 
 public:
-    DownloadAssets();
+    /** \param from_queue Pass true when pushing into DialogQueue so that
+     *  loadFromFile is deferred until DialogQueue::update calls load(). */
+    DownloadAssets(bool from_queue = false);
     ~DownloadAssets();
 
     virtual GUIEngine::EventPropagation processEvent(const std::string& event_source) OVERRIDE;
     virtual void beforeAddingWidgets() OVERRIDE;
     virtual void init() OVERRIDE;
+    virtual void load() OVERRIDE;
     void onUpdate(float delta) OVERRIDE;
     virtual bool onEscapePressed() OVERRIDE;
 };   // DownloadAssets

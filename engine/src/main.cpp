@@ -2480,12 +2480,28 @@ int main(int argc, char *argv[])
                 irr_driver->getDevice()->setWindowMinimumSize(480, 480);
             }
 #ifdef MOBILE_STK
-            // Slim Flatpak/Click: download wizard when neither stk-assets.zip nor
-            // a reused Flathub/full tree has provided tracks (Xonotic-Touch style).
-            if (!ExtractMobileAssets::hasFullAssets() &&
-                track_manager->getNumberOfTracks() == 0)
+            // Slim Flatpak/Click: download wizard when official race assets are
+            // missing. Addon tracks must not suppress it — a single downloaded
+            // addon used to make getNumberOfTracks() > 0 and skip the wizard
+            // forever, leaving the game without music/official tracks.
+            // Flathub reuse still skips the wizard because those tracks are
+            // non-addon. Dialog must be queued uninitialised (from_queue=true).
             {
-                GUIEngine::DialogQueue::get()->pushDialog(new DownloadAssets());
+                bool has_official_tracks = false;
+                for (unsigned int i = 0;
+                     i < track_manager->getNumberOfTracks(); i++)
+                {
+                    if (!track_manager->getTrack(i)->isAddon())
+                    {
+                        has_official_tracks = true;
+                        break;
+                    }
+                }
+                if (!ExtractMobileAssets::hasFullAssets() && !has_official_tracks)
+                {
+                    GUIEngine::DialogQueue::get()->pushDialog(
+                        new DownloadAssets(/*from_queue*/true));
+                }
             }
 #endif
             #if defined(MOBILE_STK) || defined(TOUCH_STK)

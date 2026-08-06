@@ -65,6 +65,12 @@ as soon as that app is updated or removed. Only the heavy media directories are
 borrowed; GUI, skins and touch icons always come from our own package so the
 stock tree cannot shadow the fork's UI.
 
+The first-launch wizard is pushed when `!ExtractMobileAssets::hasFullAssets()`
+and there are no **official** (non-addon) tracks. Addon tracks alone must not
+suppress it. The dialog is queued with `from_queue=true` so `loadFromFile` runs
+from `DialogQueue::update` — loading in the constructor breaks the queue
+contract and segfaults during skin draw.
+
 ## Config
 
 See `touch/default-multitouch.xml.snippet`. Flatpak users can enable the stock binary’s multitouch GUI with that block alone; the fork adds glass art + forced defaults.
