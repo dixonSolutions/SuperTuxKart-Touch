@@ -5,12 +5,18 @@ ROOT="${HOME}/SuperTuxKart-Touch"
 BIN="$ROOT/engine/build/bin/supertuxkart"
 RUNTIME="$ROOT/runtime"
 
-FP_DATA="$(find /var/lib/flatpak/app/net.supertuxkart.SuperTuxKart \
-  -path '*/files/share/supertuxkart/data/tracks' -type d 2>/dev/null | head -1 | xargs dirname)"
-[[ -n "$FP_DATA" ]] || { echo "Flatpak STK data not found"; exit 1; }
+# STK may be installed either system-wide or per user.
+FP_TRACKS="$(find "${HOME}/.local/share/flatpak/app/net.supertuxkart.SuperTuxKart" \
+  /var/lib/flatpak/app/net.supertuxkart.SuperTuxKart \
+  -path '*/files/share/supertuxkart/data/tracks' -type d 2>/dev/null | head -1 || true)"
+FP_DATA="${FP_TRACKS:+$(dirname "$FP_TRACKS")}"
 [[ -x "$BIN" ]] || { echo "Build first: cmake --build $ROOT/engine/build -j\$(nproc)"; exit 1; }
 
-if [[ ! -f "$RUNTIME/data/supertuxkart.git" ]]; then
+# The runtime links straight into the Flatpak install, so it goes stale as soon
+# as STK is updated and the commit directory changes. Rebuild it whenever the
+# links no longer resolve.
+if [[ ! -f "$RUNTIME/data/supertuxkart.git" || ! -d "$RUNTIME/data/tracks" ]]; then
+  [[ -n "$FP_DATA" ]] || { echo "Flatpak STK data not found"; exit 1; }
   rm -rf "$RUNTIME"
   mkdir -p "$RUNTIME/data"
   for item in "$FP_DATA"/*; do

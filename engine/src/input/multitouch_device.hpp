@@ -66,6 +66,11 @@ struct MultitouchButton
     int height;
     float axis_x;
     float axis_y;
+    /** Contact point that started the current steering gesture. The steering
+     *  axes are measured relative to it, so the stick follows the thumb
+     *  instead of forcing the thumb onto a fixed screen position. */
+    int origin_x;
+    int origin_y;
     unsigned int id;
     void (*callback)(unsigned int, bool);
 };
@@ -89,6 +94,9 @@ private:
     
     /** A parameter in range that determines the sensitivity for y axis. */
     float m_sensitivity_y;
+
+    /** Thumb travel, in pixels, that maps to full steering deflection. */
+    int m_steering_radius;
 
     float m_orientation;
     uint64_t m_gyro_time;
@@ -119,6 +127,11 @@ public:
 
     void addButton(MultitouchButtonType type, int x, int y, int width,
                    int height, void (*callback)(unsigned int, bool) = NULL);
+
+    /** Sets the thumb travel that maps to full steering deflection. A value of
+     *  zero restores the legacy behaviour, where the axes are measured from the
+     *  centre of the steering widget instead of from the contact point. */
+    void setSteeringRadius(int radius)              { m_steering_radius = radius; }
     void clearButtons();
     void reset();
 

@@ -34,6 +34,7 @@ using namespace irr;
 class AbstractKart;
 class MultitouchDevice;
 class RaceGUIBase;
+struct MultitouchButton;
 
 class RaceGUIMultitouch
 {
@@ -70,13 +71,30 @@ private:
     video::ITexture* m_glass_btn_item_tex;
     video::ITexture* m_glass_btn_drift_tex;
     video::ITexture* m_glass_btn_nitro_tex;
+    video::ITexture* m_glass_btn_nitro_fill_tex;
     video::ITexture* m_glass_btn_look_tex;
+    video::ITexture* m_glass_btn_rescue_tex;
+    video::ITexture* m_glass_stick_accel_tex;
+    video::ITexture* m_glass_stick_brake_tex;
     bool m_use_glass_ui;
+
+    /** Radius of the drawn steering stick base, in pixels. The steering hit
+     *  region is much larger than this; the base is drawn wherever the thumb
+     *  landed inside it. */
+    int m_stick_radius;
+    /** Where the stick base rests while no finger is steering. */
+    int m_stick_home_x;
+    int m_stick_home_y;
 
     void init();
     void createRaceGUI();
     void createSpectatorGUI();
     void close();
+    void drawSteering(const MultitouchButton* button, const AbstractKart* kart);
+    void drawActionButton(const MultitouchButton* button,
+                          const AbstractKart* kart,
+                          const core::recti &viewport,
+                          const core::vector2df &scaling);
     static void onCustomButtonPress(unsigned int button_id, bool pressed);
 
 public:

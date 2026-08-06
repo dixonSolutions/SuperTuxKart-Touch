@@ -8,7 +8,7 @@ Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phon
 | **Flatpak id** | `io.github.dixonSolutions.SuperTuxKartTouch` |
 | **Flatpak remote** | `supertuxtouch` |
 | **OpenStore / Click** | `supertuxkarttouch.dixonsolutions` |
-| **Assets** | First-launch download wizard (Flathub STK optional reuse) |
+| **Assets** | Karts bundled; tracks/music via first-launch download wizard |
 
 ## Quick install
 
@@ -37,7 +37,8 @@ flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 
 First launch shows the same asset download wizard if race data is missing.
 Optional: install Flathub `net.supertuxkart.SuperTuxKart` to reuse its tracks/karts
-instead of downloading (Touch stays a separate app).
+instead of downloading (Touch stays a separate app). The wizard is the supported
+path — Flathub reuse is only a shortcut, and removing that app does not break Touch.
 
 Offline `.flatpak` bundles (same app id) are on every [GitHub Release](https://github.com/dixonSolutions/SuperTuxKart-Touch/releases/latest):
 

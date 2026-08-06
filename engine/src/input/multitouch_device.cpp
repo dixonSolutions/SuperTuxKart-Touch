@@ -26,6 +26,7 @@
 #include "graphics/irr_driver.hpp"
 #include "guiengine/modaldialog.hpp"
 #include "guiengine/screen_keyboard.hpp"
+#include "utils/log.hpp"
 
 #include <IrrlichtDevice.h>
 
@@ -39,6 +40,7 @@ MultitouchDevice::MultitouchDevice()
     m_name          = "Multitouch";
     m_player        = NULL;
     m_controller    = NULL;
+    m_steering_radius = 0;
     m_irrlicht_device = irr_driver->getDevice();
 
     reset();
@@ -97,6 +99,8 @@ void MultitouchDevice::addButton(MultitouchButtonType type, int x, int y,
     button->height = height;
     button->axis_x = 0.0f;
     button->axis_y = 0.0f;
+    button->origin_x = x + width / 2;
+    button->origin_y = y + height / 2;
     button->id = m_buttons.size();
     button->callback = callback;
 
@@ -151,6 +155,7 @@ void MultitouchDevice::clearButtons()
     }
 
     m_buttons.clear();
+    m_steering_radius = 0;
 } // clearButtons
 
 // ----------------------------------------------------------------------------
@@ -164,6 +169,8 @@ void MultitouchDevice::reset()
         button->event_id = 0;
         button->axis_x = 0.0f;
         button->axis_y = 0.0f;
+        button->origin_x = button->x + button->width / 2;
+        button->origin_y = button->y + button->height / 2;
     }
 
     for (MultitouchEvent& event : m_events)
@@ -346,6 +353,11 @@ void MultitouchDevice::updateDeviceState(unsigned int event_id)
             continue;
         if (pressed_button != NULL && button != pressed_button)
             continue;
+        // A button already owned by another finger must not be taken over, or a
+        // stray palm contact inside the large steering region would cancel the
+        // steering gesture that is already in progress.
+        if (button->pressed && button->event_id != event_id)
+            continue;
 
         bool update_controls = false;
         bool prev_button_state = button->pressed;
@@ -355,14 +367,35 @@ void MultitouchDevice::updateDeviceState(unsigned int event_id)
             button->pressed = event.touched;
             button->event_id = event_id;
 
+            const bool gesture_started = button->pressed && !prev_button_state;
+            if (gesture_started)
+            {
+                button->origin_x = event.x;
+                button->origin_y = event.y;
+            }
+
+            // Distance from the gesture origin that means full deflection. When
+            // no radius is configured, fall back to measuring from the centre of
+            // the widget, which is what a fixed-position stick does.
+            const bool relative = m_steering_radius > 0 &&
+                button->type == MultitouchButtonType::BUTTON_STEERING;
+            const float radius_x = relative ? (float)m_steering_radius
+                                            : (float)(button->width / 2);
+            const float radius_y = relative ? (float)m_steering_radius
+                                            : (float)(button->height / 2);
+            const float centre_x = relative ? (float)button->origin_x
+                                            : (float)(button->x) + radius_x;
+            const float centre_y = relative ? (float)button->origin_y
+                                            : (float)(button->y) + radius_y;
+
             if (button->type == MultitouchButtonType::BUTTON_STEERING)
             {
                 float prev_axis_x = button->axis_x;
                 
                 if (button->pressed == true)
                 {
-                    button->axis_x =
-                        (float)(event.x - button->x) / (button->width/2) - 1;
+                    button->axis_x = std::min(std::max(
+                        ((float)event.x - centre_x) / radius_x, -1.0f), 1.0f);
                 }
                 else
                 {
@@ -382,8 +415,8 @@ void MultitouchDevice::updateDeviceState(unsigned int event_id)
                 
                 if (button->pressed == true)
                 {
-                    button->axis_y =
-                        (float)(event.y - button->y) / (button->height/2) - 1;
+                    button->axis_y = std::min(std::max(
+                        ((float)event.y - centre_y) / radius_y, -1.0f), 1.0f);
                 }
                 else
                 {

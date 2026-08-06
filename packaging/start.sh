@@ -90,11 +90,11 @@ try_stk_prefix() {
     return 1
 }
 
+# Only ever returns a *foreign* full asset tree (Flathub). The packaged prefix is
+# the default and needs no discovery, and RUNTIME_ROOT is a derived copy — treating
+# either as a discovery result made the launcher symlink the slim package onto
+# itself instead of falling through to the download wizard.
 discover_stk_data() {
-    if [ -f "${APP_ROOT}/data/supertuxkart.git" ] || [ -f "${APP_ROOT}/data/supertuxkart.1.5" ]; then
-        try_stk_prefix "${APP_ROOT}" && return 0
-    fi
-
     for p in \
         "${HOME}/.local/share/flatpak/app/net.supertuxkart.SuperTuxKart/current/active/files/share/supertuxkart" \
         /var/lib/flatpak/app/net.supertuxkart.SuperTuxKart/current/active/files/share/supertuxkart
@@ -110,48 +110,34 @@ discover_stk_data() {
         try_stk_prefix "$p" && return 0
     done
 
-    try_stk_prefix "${RUNTIME_ROOT}" && return 0
     return 1
 }
 
+# Heavy media the fork never modifies, so it is safe to borrow from a full tree.
+# Everything else must come from our own package: this fork ships custom GUI
+# layouts, skins and touch icons that a stock Flathub tree would otherwise shadow.
+BORROWABLE_ASSET_DIRS='tracks karts library models music sfx textures'
+
+# Build a merged tree: our packaged data plus a foreign full asset tree, so the
+# game gets real tracks/karts without a download while keeping our touch UI.
 prepare_runtime() {
-    SRC_PREFIX="$1"
-    SRC_DATA="${SRC_PREFIX}/data"
+    SRC_DATA="$1/data"
     DEST="${RUNTIME_ROOT}"
+
+    # Rebuild from scratch: symlinks from a previous run point into a Flathub
+    # commit that an update or uninstall may since have removed.
+    rm -rf "${DEST}/data"
     mkdir -p "${DEST}/data"
 
-    for item in "$SRC_DATA"/*; do
+    for item in "${APP_ROOT}/data"/*; do
         [ -e "$item" ] || continue
-        base=${item##*/}
-        case "$base" in
-            gui|skins)
-                rm -rf "${DEST}/data/$base"
-                cp -a "$item" "${DEST}/data/$base"
-                ;;
-            *)
-                ln -sfn "$item" "${DEST}/data/$base"
-                ;;
-        esac
+        ln -sfn "$item" "${DEST}/data/${item##*/}"
     done
 
-    if [ -f "${APP_ROOT}/data/supertuxkart.git" ]; then
-        cp -f "${APP_ROOT}/data/supertuxkart.git" "${DEST}/data/"
-    elif [ ! -e "${DEST}/data/supertuxkart.git" ]; then
-        if [ -e "${DEST}/data/supertuxkart.1.5" ]; then
-            cp -fL "${DEST}/data/supertuxkart.1.5" "${DEST}/data/supertuxkart.git" 2>/dev/null \
-                || touch "${DEST}/data/supertuxkart.git"
-        else
-            touch "${DEST}/data/supertuxkart.git"
-        fi
-    fi
-
-    if [ -d "${APP_ROOT}/data/gui/icons/android" ]; then
-        for d in "${DEST}/data/gui/icons/android" \
-                 "${DEST}/data/skins"/*/data/gui/icons/android; do
-            [ -d "$d" ] || continue
-            cp -f "${APP_ROOT}/data/gui/icons/android"/glass_*.png "$d/" 2>/dev/null || true
-        done
-    fi
+    for base in $BORROWABLE_ASSET_DIRS; do
+        [ -d "${SRC_DATA}/$base" ] || continue
+        ln -sfn "${SRC_DATA}/$base" "${DEST}/data/$base"
+    done
 }
 
 # --- launch paths -------------------------------------------------------------
@@ -177,17 +163,12 @@ else
         flatpak-spawn --host powerprofilesctl set power-saver >/dev/null 2>&1 || true
     fi
 
-    STK_PREFIX="$(discover_stk_data || true)"
-    if [ -n "${STK_PREFIX:-}" ]; then
-        # Optional fast path: reuse Flathub / local full STK data tree.
-        case "$STK_PREFIX" in
-            "$RUNTIME_ROOT") ;;
-            *)
-                prepare_runtime "$STK_PREFIX"
-                STK_PREFIX="$RUNTIME_ROOT"
-                ;;
-        esac
-        stk_log "using local assets from $STK_PREFIX"
+    FLATHUB_PREFIX="$(discover_stk_data || true)"
+    if [ -n "${FLATHUB_PREFIX:-}" ]; then
+        # Optional fast path: merge a full Flathub tree over our packaged data.
+        prepare_runtime "$FLATHUB_PREFIX"
+        STK_PREFIX="$RUNTIME_ROOT"
+        stk_log "reusing Flathub assets from $FLATHUB_PREFIX"
     else
         # No Flathub STK — launch slim package; MOBILE_STK shows the download wizard.
         STK_PREFIX="$APP_ROOT"
