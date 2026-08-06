@@ -227,11 +227,11 @@ jobs:
             echo
             echo "### Flatpak remote (recommended)"
             echo '```bash'
-            echo "flatpak install -y flathub net.supertuxkart.SuperTuxKart   # assets once"
             echo "flatpak remote-add --user --if-not-exists --no-gpg-verify ${FLATPAK_REMOTE_NAME} \\"
             echo "  ${FLATPAK_REMOTE_URL}"
             echo "flatpak install --user ${FLATPAK_REMOTE_NAME} ${FLATPAK_APP_ID}"
             echo "flatpak run ${FLATPAK_APP_ID}"
+            echo "# First launch downloads race assets (or reuses Flathub STK if installed)."
             echo '```'
             echo
             echo "### Offline Flatpak bundles (this release)"

@@ -45,6 +45,12 @@ if [[ ! -f "$DEST/data/supertuxkart.git" ]]; then
   printf 'SuperTuxKart Touch\n' > "$DEST/data/supertuxkart.git"
 fi
 
+# MOBILE_STK FileManager requires these dirs; real content comes from Flathub
+# reuse (start.sh) or the in-engine DownloadAssets wizard (stk-assets.zip).
+for stub in tracks karts library models music sfx textures; do
+  mkdir -p "$DEST/data/$stub"
+done
+
 install -m 644 "$ROOT/flatpak/${APP_ID}.desktop" \
   "$DEST/share/applications/${APP_ID}.desktop"
 install -m 644 "$ROOT/flatpak/${APP_ID}.metainfo.xml" \

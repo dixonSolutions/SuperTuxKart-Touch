@@ -114,7 +114,11 @@ DownloadAssets::DownloadAssets()
         "(including high quality textures and music) for better "
         "gaming experience, this will use your mobile data if you don't have "
         "a wifi connection.");
-#ifdef ANDROID
+#if defined(TOUCH_STK) && !defined(ANDROID)
+    // I18N: In download assets dialog (Linux tablet / Flatpak / Click)
+    msg = _("SuperTuxKart Touch needs race assets (tracks, karts, textures, music). "
+        "Download them now to finish setup — Wi‑Fi recommended.");
+#elif defined(ANDROID)
     if (SDL_IsAndroidTV())
     {
         // I18N: In download assets dialog

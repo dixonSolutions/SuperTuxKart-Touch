@@ -8,7 +8,8 @@ New project (`SuperTuxKart-Touch`), not shared runtime code with Xonotic-Touch. 
 
 | Flag | Purpose |
 |------|---------|
-| `-DTOUCH_STK=ON` | Defines `TOUCH_STK` (not `MOBILE_STK` on Linux); glass HUD; touch defaults |
+| `-DTOUCH_STK=ON` | Glass HUD; touch defaults |
+| `-DTOUCH_STK_MOBILE_ASSETS=ON` | `MOBILE_STK` download wizard when tracks missing (default ON) |
 | `-DCHECK_ASSETS=off` | Allow compile without full `stk-assets` tree next to `engine/` |
 | `-DNO_SHADERC=on` | Skip Vulkan shaderc dependency |
 | `-DBUILD_RECORDER=off` | Skip openglrecorder |

@@ -29,6 +29,7 @@ Installed clicks store the manifest at `.click/info/<name>.manifest`, not
 4. **Do not** call host `mkdir` / `xrandr` / `powerprofilesctl` (exit 126 under AA).
 5. First-run tracks/karts come from in-engine **MOBILE_STK** download into
    `~/.local/share/supertuxkart-touch/stk-assets/` (libc `mkdir`, not coreutils).
+   Flatpak uses the same wizard when Flathub STK is not installed.
 
 ## On-device checks
 

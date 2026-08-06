@@ -2479,6 +2479,15 @@ int main(int argc, char *argv[])
             {
                 irr_driver->getDevice()->setWindowMinimumSize(480, 480);
             }
+#ifdef MOBILE_STK
+            // Slim Flatpak/Click: download wizard when neither stk-assets.zip nor
+            // a reused Flathub/full tree has provided tracks (Xonotic-Touch style).
+            if (!ExtractMobileAssets::hasFullAssets() &&
+                track_manager->getNumberOfTracks() == 0)
+            {
+                GUIEngine::DialogQueue::get()->pushDialog(new DownloadAssets());
+            }
+#endif
             #if defined(MOBILE_STK) || defined(TOUCH_STK)
             if (UserConfigParams::m_multitouch_controls == MULTITOUCH_CONTROLS_UNDEFINED)
             {
@@ -2496,13 +2505,6 @@ int main(int argc, char *argv[])
                 }
             }
             #endif
-#ifdef MOBILE_STK
-            // Slim Click packages: prompt once for full tracks/karts/textures.
-            if (!ExtractMobileAssets::hasFullAssets())
-            {
-                GUIEngine::DialogQueue::get()->pushDialog(new DownloadAssets());
-            }
-#endif
 
             class DriverDialog :
                   public MessageDialog::IConfirmDialogListener

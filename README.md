@@ -8,7 +8,7 @@ Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phon
 | **Flatpak id** | `io.github.dixonSolutions.SuperTuxKartTouch` |
 | **Flatpak remote** | `supertuxtouch` |
 | **OpenStore / Click** | `supertuxkarttouch.dixonsolutions` |
-| **Assets** | Install Flathub STK once for tracks/karts (stays separate) |
+| **Assets** | First-launch download wizard (Flathub STK optional reuse) |
 
 ## Quick install
 
@@ -23,23 +23,21 @@ wget https://dixonSolutions.github.io/SuperTuxKart-Touch/click/latest-arm64.clic
 pkcon install-local --allow-untrusted latest-arm64.click
 ```
 
-First launch downloads full tracks/karts (~200 MB) over the network into
+First launch opens an in-game setup dialog that downloads tracks/karts (~200 MB) into
 `~/.local/share/supertuxkart-touch/stk-assets/`.
 
 ### Linux Flatpak (remote)
 
 ```bash
-# 1) Race assets once (stock STK on Flathub — required for tracks/karts)
-flatpak install -y flathub net.supertuxkart.SuperTuxKart
-
-# 2) SuperTuxTouch remote (name includes "touch" — does not replace Flathub STK)
 flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxtouch \
   https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
-
-# 3) Install + run
 flatpak install --user -y supertuxtouch io.github.dixonSolutions.SuperTuxKartTouch
 flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 ```
+
+First launch shows the same asset download wizard if race data is missing.
+Optional: install Flathub `net.supertuxkart.SuperTuxKart` to reuse its tracks/karts
+instead of downloading (Touch stays a separate app).
 
 Offline `.flatpak` bundles (same app id) are on every [GitHub Release](https://github.com/dixonSolutions/SuperTuxKart-Touch/releases/latest):
 
@@ -50,23 +48,13 @@ flatpak install --user SuperTuxKartTouch-*-x86_64.flatpak
 
 ## If the app does not start
 
-Almost always **missing Flathub assets** (especially when STK was installed with `--user` on a tablet):
-
-```bash
-flatpak install -y flathub net.supertuxkart.SuperTuxKart
-flatpak update --user io.github.dixonSolutions.SuperTuxKartTouch
-flatpak run io.github.dixonSolutions.SuperTuxKartTouch
-```
-
-Check the launcher message:
-
 ```bash
 flatpak run io.github.dixonSolutions.SuperTuxKartTouch 2>&1 | tee /tmp/stk-touch.log
-# Look for: "game assets not found"  → install Flathub STK
 # Look for: "Couldn't initialise irrlicht" → display/GPU session issue
 ```
 
 Launch from the app grid (graphical session), not a bare SSH shell without `WAYLAND_DISPLAY` / `DISPLAY`.
+On first run, complete the in-game **Download** step (needs network).
 
 ## Performance
 

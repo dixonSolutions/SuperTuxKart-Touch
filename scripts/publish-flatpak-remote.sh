@@ -99,13 +99,11 @@ App id <code>${FLATPAK_APP_ID}</code> — separate from Flathub <code>net.supert
 Remote name <code>${FLATPAK_REMOTE_NAME}</code> (touch keyword) so installs do not collide with stock SuperTuxKart.
 </p>
 <pre>
-# Optional once: Flathub STK for tracks/karts assets
-flatpak install -y flathub net.supertuxkart.SuperTuxKart
-
 flatpak remote-add --user --if-not-exists --no-gpg-verify ${FLATPAK_REMOTE_NAME} \\
   ${FLATPAK_REMOTE_URL}
 flatpak install --user ${FLATPAK_REMOTE_NAME} ${FLATPAK_APP_ID}
 flatpak run ${FLATPAK_APP_ID}
+# First launch downloads race assets (or reuses Flathub STK if installed).
 </pre>
 </body>
 </html>

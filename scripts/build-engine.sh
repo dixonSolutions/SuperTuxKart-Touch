@@ -25,13 +25,13 @@ CMAKE_ARGS=(
   -DCMAKE_INSTALL_PREFIX=/usr
 )
 
-# Ubuntu Touch / Clickable: GLES2 renderer (no desktop GL) + in-engine assets.
+# Ubuntu Touch / Clickable: GLES2 renderer (no desktop GL).
 if [ -n "${INSTALL_DIR:-}" ] || [ "${STK_USE_GLES2:-}" = "1" ]; then
   CMAKE_ARGS+=(-DUSE_GLES2=on)
 fi
-if [ -n "${INSTALL_DIR:-}" ] || [ "${STK_MOBILE_ASSETS:-}" = "1" ]; then
-  CMAKE_ARGS+=(-DTOUCH_STK_MOBILE_ASSETS=ON)
-fi
+# Flatpak + Click: in-engine DownloadAssets wizard when full tracks/karts are missing
+# (Flathub SuperTuxKart is optional reuse, not required — same idea as Xonotic Touch).
+CMAKE_ARGS+=(-DTOUCH_STK_MOBILE_ASSETS=ON)
 
 # Clickable / cross: honour toolchain compilers when set.
 if [ -n "${CC:-}" ]; then CMAKE_ARGS+=(-DCMAKE_C_COMPILER="$CC"); fi

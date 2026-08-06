@@ -178,21 +178,21 @@ else
     fi
 
     STK_PREFIX="$(discover_stk_data || true)"
-    if [ -z "${STK_PREFIX:-}" ]; then
-        stk_log "game assets not found — app cannot start."
-        stk_log "Install Flathub SuperTuxKart once (system or --user), then retry:"
-        stk_log "  flatpak install -y flathub net.supertuxkart.SuperTuxKart"
-        stk_log "Or place a full data tree under ${APP_ROOT}/data"
-        exit 1
+    if [ -n "${STK_PREFIX:-}" ]; then
+        # Optional fast path: reuse Flathub / local full STK data tree.
+        case "$STK_PREFIX" in
+            "$RUNTIME_ROOT") ;;
+            *)
+                prepare_runtime "$STK_PREFIX"
+                STK_PREFIX="$RUNTIME_ROOT"
+                ;;
+        esac
+        stk_log "using local assets from $STK_PREFIX"
+    else
+        # No Flathub STK — launch slim package; MOBILE_STK shows the download wizard.
+        STK_PREFIX="$APP_ROOT"
+        stk_log "no local Flathub assets — first launch will download tracks/karts"
     fi
-
-    case "$STK_PREFIX" in
-        "$RUNTIME_ROOT") ;;
-        *)
-            prepare_runtime "$STK_PREFIX"
-            STK_PREFIX="$RUNTIME_ROOT"
-            ;;
-    esac
 fi
 
 SCREENSIZE="${STK_TOUCH_SCREENSIZE:-}"

@@ -8,7 +8,7 @@ Distribution model matches Xonotic-Touch: Flatpak OSTree remote + offline bundle
 | Flatpak app id | `io.github.dixonSolutions.SuperTuxKartTouch` |
 | Flatpak remote name | **`supertuxtouch`** (touch keyword — not Flathub) |
 | Flatpak remote URL | https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak |
-| Stock STK (assets only) | Flathub `net.supertuxkart.SuperTuxKart` |
+| Stock STK (optional assets) | Flathub `net.supertuxkart.SuperTuxKart` — or in-app download |
 | Click id | `supertuxkarttouch.dixonsolutions` |
 | Click latest | https://dixonSolutions.github.io/SuperTuxKart-Touch/click/latest-arm64.click |
 | OpenStore | https://open-store.io/app/supertuxkarttouch.dixonsolutions |
@@ -19,7 +19,6 @@ Distribution model matches Xonotic-Touch: Flatpak OSTree remote + offline bundle
 
 ```bash
 # Flatpak remote (Linux tablets)
-flatpak install -y flathub net.supertuxkart.SuperTuxKart   # assets — required
 flatpak remote-add --user --if-not-exists --no-gpg-verify supertuxtouch \
   https://dixonSolutions.github.io/SuperTuxKart-Touch/flatpak
 flatpak install --user -y supertuxtouch io.github.dixonSolutions.SuperTuxKartTouch
@@ -28,7 +27,7 @@ flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 
 Remote name `supertuxtouch` and app id `…SuperTuxKartTouch` stay separate from Flathub `net.supertuxkart.SuperTuxKart`.
 
-**Won’t start?** Install Flathub STK (system or `--user`). User installs need the Touch Flatpak that allows `xdg-data/flatpak/app/net.supertuxkart.SuperTuxKart` (1.0.9+).
+First launch downloads race assets in-game (or reuses Flathub STK if already installed).
 
 ## CI
 
@@ -60,11 +59,10 @@ STK_TOUCH_PERF=quality  flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 
 CI builds arm64 + armhf `.click` on each `main` push and uploads revisions when `OPENSTORE_API_KEY` is set.
 
-Slim Click packages use the upstream **MOBILE_STK** asset download on first launch
-(`stk-assets.zip` → `~/.local/share/supertuxkart-touch/stk-assets/`). The launcher
-uses shell builtins only under AppArmor (no host `dirname` / `mkdir` / `xrandr`) and
-detects Click via `supertuxkart.apparmor` / `.supertuxkart-touch-click` (installed
-trees do not keep `manifest.json` in the data dir). See
+Flatpak and Click use the upstream **MOBILE_STK** download dialog on first launch
+when tracks are missing (`stk-assets.zip` → `~/.local/share/supertuxkart-touch/stk-assets/`).
+Flathub STK is optional reuse. Click launchers use shell builtins only under AppArmor
+and detect Click via `supertuxkart.apparmor` / `.supertuxkart-touch-click`. See
 [UBUNTU_TOUCH_LAUNCH.md](UBUNTU_TOUCH_LAUNCH.md).
 
 | | |
