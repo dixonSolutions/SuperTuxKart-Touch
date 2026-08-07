@@ -58,6 +58,8 @@ STK_TOUCH_PERF=quality  flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 ## Click / OpenStore
 
 CI builds arm64 + armhf `.click` on each `main` push and uploads revisions when `OPENSTORE_API_KEY` is set.
+Uploads retry on OpenStore nginx 502/503 (large Click packages). To re-push an existing
+release without rebuilding, run the **OpenStore republish** workflow with the release tag.
 
 Flatpak and Click use the upstream **MOBILE_STK** download dialog on first launch
 when tracks are missing (`stk-assets.zip` → `~/.local/share/supertuxkart-touch/stk-assets/`).

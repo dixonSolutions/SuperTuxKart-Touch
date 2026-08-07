@@ -267,9 +267,12 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
       - name: Upload revisions + publish
         env:
           OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
@@ -281,38 +284,11 @@ jobs:
             echo "OPENSTORE_API_KEY secret is missing — cannot publish to OpenStore." >&2
             exit 1
           fi
-          REVISION_CHANGELOG="SuperTuxKart Touch ${VERSION}: glass HUD, thermal profile, packaging."
+          chmod +x scripts/publish-openstore.sh
           mapfile -t CLICKS < <(find artifacts/click-arm64 artifacts/click-armhf -name '*.click' -type f | sort)
           if [ "${#CLICKS[@]}" -lt 2 ]; then
             echo "Expected arm64 + armhf .click artifacts, found ${#CLICKS[@]}" >&2
             find artifacts -type f | head -50 >&2 || true
             exit 1
           fi
-          for f in "${CLICKS[@]}"; do
-            echo "Publishing $(basename "$f") → OpenStore ${CLICK_NAME}..."
-            http_code="$(
-              curl -sS -o /tmp/openstore-resp.json -w '%{http_code}' \
-                --connect-timeout 30 --max-time 900 \
-                -X POST \
-                -F "file=@${f}" \
-                -F "channel=focal" \
-                -F "changelog=${REVISION_CHANGELOG}" \
-                "https://open-store.io/api/v3/manage/${CLICK_NAME}/revision?apikey=${OPENSTORE_API_KEY}"
-            )"
-            echo "HTTP ${http_code}"
-            cat /tmp/openstore-resp.json || true
-            python3 -c 'import json,sys; d=json.load(open("/tmp/openstore-resp.json")); sys.exit(0 if d.get("success") else 1)' \
-              || { echo "OpenStore revision rejected for $f" >&2; exit 1; }
-            if [ "$http_code" != "200" ]; then
-              echo "OpenStore upload failed for $f" >&2
-              exit 1
-            fi
-          done
-          # Flip Published=Yes once revisions exist (listing + screenshots already set).
-          curl -sS -o /tmp/openstore-pub.json -w 'publish HTTP %{http_code}\n' -X PUT \
-            -F "published=true" \
-            -F "changelog=${REVISION_CHANGELOG}" \
-            "https://open-store.io/api/v3/manage/${CLICK_NAME}?apikey=${OPENSTORE_API_KEY}"
-          cat /tmp/openstore-pub.json || true
-          python3 -c 'import json,sys; d=json.load(open("/tmp/openstore-pub.json")); sys.exit(0 if d.get("success") and d.get("data",{}).get("published") else 1)'
-          echo "OpenStore published: https://open-store.io/app/${CLICK_NAME}"
+          bash scripts/publish-openstore.sh "${CLICKS[@]}"
