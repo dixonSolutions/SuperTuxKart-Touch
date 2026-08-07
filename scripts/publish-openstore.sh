@@ -19,27 +19,41 @@ if [ "${#CLICKS[@]}" -lt 1 ]; then
   exit 1
 fi
 
-is_success_json() {
-  local path="$1"
-  python3 - "$path" <<'PY'
+# Exit 0 = success (or already present), 1 = permanent reject, 2 = transient/retryable.
+classify_revision_response() {
+  local http_code="$1" path="$2"
+  python3 - "$http_code" "$path" <<'PY'
 import json, sys
-path = sys.argv[1]
+code, path = sys.argv[1], sys.argv[2]
+body = open(path, encoding="utf-8", errors="replace").read()
 try:
-    data = json.load(open(path, encoding="utf-8"))
-except Exception as exc:
-    print(f"non-JSON response ({exc})", file=sys.stderr)
-    sys.exit(1)
+    data = json.loads(body)
+except Exception:
+    # nginx 502 HTML etc.
+    sys.exit(2 if code.startswith("5") or code in {"408", "429"} else 1)
+
 if data.get("success"):
     sys.exit(0)
-print(data, file=sys.stderr)
-sys.exit(1)
+
+message = str(data.get("message") or "").lower()
+# Idempotent republish: arm64 often lands before armhf fails mid-job.
+if "already exists" in message and "revision" in message:
+    print("Revision already on OpenStore — treating as success", file=sys.stderr)
+    sys.exit(0)
+
+if code in {"408", "429"} or code.startswith("5"):
+    sys.exit(2)
+if code.startswith("4"):
+    print(data, file=sys.stderr)
+    sys.exit(1)
+sys.exit(2)
 PY
 }
 
 upload_revision() {
   local file="$1"
   local attempt=1
-  local http_code delay
+  local http_code delay rc
 
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
     echo "OpenStore revision upload attempt ${attempt}/${MAX_ATTEMPTS}: $(basename "$file")"
@@ -56,17 +70,18 @@ upload_revision() {
     head -c 800 /tmp/openstore-resp.json 2>/dev/null || true
     echo
 
-    if [ "$http_code" = "200" ] && is_success_json /tmp/openstore-resp.json; then
-      echo "Uploaded $(basename "$file")"
-      return 0
-    fi
-
-    # Permanent client errors (except request timeout / rate limit).
-    if [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ] \
-      && [ "$http_code" != "408" ] && [ "$http_code" != "429" ]; then
-      echo "OpenStore rejected $(basename "$file") with HTTP ${http_code}" >&2
-      return 1
-    fi
+    rc=0
+    classify_revision_response "$http_code" /tmp/openstore-resp.json || rc=$?
+    case "$rc" in
+      0)
+        echo "OK: $(basename "$file")"
+        return 0
+        ;;
+      1)
+        echo "OpenStore rejected $(basename "$file") with HTTP ${http_code}" >&2
+        return 1
+        ;;
+    esac
 
     delay=$((15 * attempt))
     echo "Transient OpenStore failure (HTTP ${http_code}); retrying in ${delay}s..."
