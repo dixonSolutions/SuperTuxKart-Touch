@@ -10,6 +10,7 @@ binaries outside the click tree are not executable (`dirname`, `mkdir`, `xrandr`
 |--------|---------|--------|
 | [#1](https://github.com/dixonSolutions/SuperTuxKart-Touch/issues/1) | `dirname: Permission denied`, `//bin/supertuxkart` | Launcher used `/usr/bin/dirname` |
 | [#2](https://github.com/dixonSolutions/SuperTuxKart-Touch/issues/2) | Lomiri exit **126**; manual run: `game assets not found` | (1) host `mkdir` under `set -e` → 126; (2) Click detection required `manifest.json`, which is **not** in the installed data tree |
+| [#3](https://github.com/dixonSolutions/SuperTuxKart-Touch/issues/3) | Logo, then crash; `SFXManager` fatal on `sfx.xml`; cannot create `~/.config/supertuxkart` | (1) Click staging created empty `sfx/` stubs and never ran `fetch-boot-assets.py`; (2) XDG paths used unconfined `supertuxkart` dirs denied by AppArmor |
 
 ## Detection
 

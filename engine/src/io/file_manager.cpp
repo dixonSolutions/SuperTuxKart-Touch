@@ -234,8 +234,20 @@ FileManager::FileManager()
 #elif defined (ANDROID)
     m_stk_assets_download_dir += "/stk-assets/";
 #elif defined (TOUCH_STK)
-    // Ubuntu Touch / Linux tablet Click: writable user data (AppArmor home).
-    m_stk_assets_download_dir += "/.local/share/supertuxkart-touch/stk-assets/";
+    // Flatpak uses finish-args xdg-data/supertuxkart-touch. Click confinement
+    // cannot write there — packaging/start.sh sets STK_TOUCH_ASSETS_DIR under
+    // the package's XDG_DATA_HOME instead (issue #3).
+    if (getenv("STK_TOUCH_ASSETS_DIR") != NULL)
+    {
+        m_stk_assets_download_dir = getenv("STK_TOUCH_ASSETS_DIR");
+        if (!m_stk_assets_download_dir.empty() &&
+            *m_stk_assets_download_dir.rbegin() != '/')
+            m_stk_assets_download_dir += "/";
+    }
+    else
+    {
+        m_stk_assets_download_dir += "/.local/share/supertuxkart-touch/stk-assets/";
+    }
 #else
 #error You must set m_stk_assets_download_dir to appropriate place for your platform
 #endif

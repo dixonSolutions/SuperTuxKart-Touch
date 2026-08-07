@@ -149,10 +149,22 @@ fi
 
 if [ "$CLICK_PACKAGE" -eq 1 ]; then
     # Slim Click: in-engine MOBILE_STK downloads tracks/karts into
-    # ~/.local/share/supertuxkart-touch/stk-assets/ (libc mkdir, not /usr/bin/mkdir).
+    # $XDG_DATA_HOME/stk-assets/ (libc mkdir, not /usr/bin/mkdir).
     STK_PREFIX="$APP_ROOT"
     stk_log "Click launch from $APP_ROOT"
     # Do not call host mkdir/xrandr/powerprofilesctl — AppArmor returns 126.
+    #
+    # Confinement only allows writes under the click package name. Point XDG_*
+    # there before the engine creates ~/.config/supertuxkart etc. (issue #3).
+    CLICK_ID="${CLICK_NAME:-supertuxkarttouch.dixonsolutions}"
+    # Prefer APP_ID from lomiri-app-launch when present (name_app_version).
+    case "${APP_ID:-}" in
+        *_*) CLICK_ID="${APP_ID%%_*}" ;;
+    esac
+    export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config/${CLICK_ID}}"
+    export XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share/${CLICK_ID}}"
+    export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache/${CLICK_ID}}"
+    export STK_TOUCH_ASSETS_DIR="${STK_TOUCH_ASSETS_DIR:-${XDG_DATA_HOME}/stk-assets}"
 else
     # Desktop / Flatpak: host coreutils are available.
     mkdir -p "$USER_DATA" "$RUNTIME_ROOT"

@@ -52,10 +52,16 @@ not degrade gracefully — it kills the app on launch:
 `scripts/fetch-boot-assets.py` closes that gap at build time. It pulls only the
 boot-critical directories (`sfx`, `models`, `textures`, `library`, `karts`, ~87 MB)
 out of the upstream `stk-assets-mobile` release using HTTP range requests, so a
-build transfers a fraction of the 228 MB archive. `scripts/stage-flatpak.sh` runs
-it, and the release tag is taken from the engine's `PROJECT_VERSION` — the same
-value `STK_VERSION` puts in the wizard's download URL, so bundled and downloaded
-assets always come from one release.
+build transfers a fraction of the 228 MB archive. Both `scripts/stage-flatpak.sh`
+and `scripts/stage-click.sh` run it — Click 1.0.15 omitted this step and died on
+`sfx.xml` before the wizard (issue #3). The release tag is taken from the
+engine's `PROJECT_VERSION` — the same value `STK_VERSION` puts in the wizard's
+download URL, so bundled and downloaded assets always come from one release.
+
+On Ubuntu Touch, AppArmor only allows writes under the click package name.
+`packaging/start.sh` therefore sets `XDG_{CONFIG,DATA,CACHE}_HOME` and
+`STK_TOUCH_ASSETS_DIR` for Click launches so config and the download wizard land
+in confined paths instead of `~/.config/supertuxkart` / `~/.local/share/supertuxkart`.
 
 `packaging/start.sh` can instead borrow a full tree from a locally installed
 Flathub `net.supertuxkart.SuperTuxKart` to skip the download. That is a shortcut
