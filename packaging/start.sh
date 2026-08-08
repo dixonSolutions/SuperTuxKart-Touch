@@ -154,17 +154,23 @@ if [ "$CLICK_PACKAGE" -eq 1 ]; then
     stk_log "Click launch from $APP_ROOT"
     # Do not call host mkdir/xrandr/powerprofilesctl — AppArmor returns 126.
     #
-    # Confinement only allows writes under the click package name. Point XDG_*
-    # there before the engine creates ~/.config/supertuxkart etc. (issue #3).
+    # Confinement only allows writes under the click package name. Lomiri often
+    # pre-sets XDG_* to $HOME/.config etc.; keeping those with ${VAR:-…} still
+    # lands on ~/.config/supertuxkart which AppArmor denies (issue #4). Always
+    # force the click-id paths (and SAVEDIR) so config + asset download work.
     CLICK_ID="${CLICK_NAME:-supertuxkarttouch.dixonsolutions}"
     # Prefer APP_ID from lomiri-app-launch when present (name_app_version).
     case "${APP_ID:-}" in
         *_*) CLICK_ID="${APP_ID%%_*}" ;;
     esac
-    export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config/${CLICK_ID}}"
-    export XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share/${CLICK_ID}}"
-    export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache/${CLICK_ID}}"
-    export STK_TOUCH_ASSETS_DIR="${STK_TOUCH_ASSETS_DIR:-${XDG_DATA_HOME}/stk-assets}"
+    export XDG_CONFIG_HOME="${HOME}/.config/${CLICK_ID}"
+    export XDG_DATA_HOME="${HOME}/.local/share/${CLICK_ID}"
+    export XDG_CACHE_HOME="${HOME}/.cache/${CLICK_ID}"
+    export STK_TOUCH_ASSETS_DIR="${XDG_DATA_HOME}/stk-assets"
+    # FileManager short-circuits to this for config-0.10/ (no /supertuxkart append).
+    export SUPERTUXKART_SAVEDIR="${XDG_CONFIG_HOME}/supertuxkart"
+    stk_log "Click XDG_CONFIG_HOME=$XDG_CONFIG_HOME"
+    stk_log "Click STK_TOUCH_ASSETS_DIR=$STK_TOUCH_ASSETS_DIR"
 else
     # Desktop / Flatpak: host coreutils are available.
     mkdir -p "$USER_DATA" "$RUNTIME_ROOT"
@@ -200,7 +206,10 @@ fi
 export STK_TOUCH_PERF="$PERF"
 # STK appends /data/ to this path
 export SUPERTUXKART_DATADIR="$STK_PREFIX"
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+# Desktop/Flatpak only — never reset Click XDG back to $HOME/.config (issue #4).
+if [ "$CLICK_PACKAGE" -eq 0 ]; then
+    export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+fi
 
 cd "${BIN%/*}"
 # shellcheck disable=SC2086

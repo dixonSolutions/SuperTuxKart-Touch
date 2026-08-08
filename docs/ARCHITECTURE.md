@@ -59,9 +59,11 @@ engine's `PROJECT_VERSION` — the same value `STK_VERSION` puts in the wizard's
 download URL, so bundled and downloaded assets always come from one release.
 
 On Ubuntu Touch, AppArmor only allows writes under the click package name.
-`packaging/start.sh` therefore sets `XDG_{CONFIG,DATA,CACHE}_HOME` and
-`STK_TOUCH_ASSETS_DIR` for Click launches so config and the download wizard land
-in confined paths instead of `~/.config/supertuxkart` / `~/.local/share/supertuxkart`.
+`packaging/start.sh` therefore **forces** `XDG_{CONFIG,DATA,CACHE}_HOME`,
+`STK_TOUCH_ASSETS_DIR`, and `SUPERTUXKART_SAVEDIR` for Click launches (Lomiri's
+pre-set `$HOME/.config` must not be kept via `${VAR:-…}`) so config and the
+download wizard land under `~/.config/<click-id>/…` instead of the denied
+`~/.config/supertuxkart` path (issues #3 / #4).
 
 `packaging/start.sh` can instead borrow a full tree from a locally installed
 Flathub `net.supertuxkart.SuperTuxKart` to skip the download. That is a shortcut
