@@ -391,6 +391,12 @@ sed -i "s/import org.supertuxkart.*.STKEditText;/import $PACKAGE_NAME.STKEditTex
 sed -i "s/package org.supertuxkart.*/package $PACKAGE_NAME;/g" \
        "$DIRNAME/src/main/java/SuperTuxKartActivity.java"
 
+sed -i "s/package org.supertuxkart.*/package $PACKAGE_NAME;/g" \
+       "$DIRNAME/src/main/java/STKUpdateChecker.java"
+
+sed -i "s/\"org.supertuxkart.*INSTALL_STATUS\"/\"$PACKAGE_NAME.INSTALL_STATUS\"/g" \
+       "$DIRNAME/src/main/java/STKUpdateChecker.java"
+
 sed -i "s/import org.supertuxkart.*/import $PACKAGE_NAME.STKEditText;/g" \
        "$DIRNAME/src/main/java/SuperTuxKartActivity.java"
 
