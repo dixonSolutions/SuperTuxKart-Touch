@@ -14,3 +14,21 @@ CMakeFiles/
 compile_commands.json
 .DS_Store
 click/.ci-*
+
+# Android build inputs and outputs (scripts/android-build.sh)
+build/android/
+build/android-out/
+engine/lib/.android-deps-*
+engine/lib/libadrenotools/
+engine/android/deps-*/
+engine/android/assets/
+engine/android/mesa/
+engine/android/build/
+engine/android/obj/
+engine/android/libs/
+engine/android/res/
+engine/android/bin/
+engine/android/.gradle/
+engine/android/.cxx/
+engine/android/android-sdk
+engine/android/android-ndk
