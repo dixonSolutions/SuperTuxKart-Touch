@@ -364,10 +364,14 @@ build_deps()
         sed -i '/-Werror/d' Source/cmake_core.cmake
         sed -i 's|${ASTCENC_TARGET}-static|astcenc|g' Source/cmake_core.cmake
         if [ "$ARCH_OPTION" = "armeabi-v7a" ]; then
+            # Without an explicit ISA, astcenc defaults to NATIVE and hands the
+            # cross-compiler -march=native. 32-bit ARM has no astcenc NEON
+            # target, so the portable path is the one to ask for.
             cmake . -DCMAKE_TOOLCHAIN_FILE=../../../cmake/Toolchain-android.cmake \
                     -DHOST=$HOST -DARCH=$ARCH -DSTK_ARM_NEON=ON                   \
                     -DCMAKE_C_FLAGS="-fpic -O3 -g -mfpu=neon"                     \
                     -DCMAKE_CXX_FLAGS="-fpic -O3 -g -mfpu=neon"                   \
+                    -DASTCENC_ISA_NATIVE=OFF -DASTCENC_ISA_NONE=ON                \
                     -DASTCENC_INVARIANCE=OFF -DASTCENC_CLI=OFF
         elif [ "$ARCH_OPTION" = "arm64-v8a" ]; then
             cmake . -DCMAKE_TOOLCHAIN_FILE=../../../cmake/Toolchain-android.cmake \
@@ -409,7 +413,12 @@ build_deps()
             touch "$DIRNAME/deps-$ARCH_OPTION/libadrenotools.stamp"
         fi
 
-        if [ ! -f "$DIRNAME/deps-$ARCH_OPTION/mesa.stamp" ]; then
+        # mesa is a stk-code git submodule, not part of the dependency release,
+        # so a source tree built from the tarball simply has no Turnip driver to
+        # bundle. Skipping is a feature loss, not a build failure.
+        if [ ! -d "$DIRNAME/../lib/mesa" ]; then
+            echo "Skipping $ARCH_OPTION mesa: no lib/mesa checkout (bundled Turnip driver unavailable)"
+        elif [ ! -f "$DIRNAME/deps-$ARCH_OPTION/mesa.stamp" ]; then
             echo "Compiling $ARCH_OPTION mesa"
             mkdir -p "$DIRNAME/deps-$ARCH_OPTION/mesa"
             cp -a -f "$DIRNAME/../lib/mesa/"* "$DIRNAME/deps-$ARCH_OPTION/mesa"

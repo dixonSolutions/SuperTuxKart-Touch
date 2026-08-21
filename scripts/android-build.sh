@@ -147,6 +147,18 @@ if [ ! -d "$ROOT/engine/lib/sdl2/android-project" ]; then
     exit 1
 fi
 
+# libadrenotools is a stk-code git submodule rather than part of the dependency
+# release, and make_deps.sh clones it from lib/ by local path. arm64 links it
+# unconditionally, so fetch it here. (lib/mesa is the same kind of submodule but
+# only supplies the optional bundled Turnip driver, which make_deps.sh now skips
+# when it is absent.)
+ADRENOTOOLS_REPO="${ADRENOTOOLS_REPO:-https://github.com/bylaws/libadrenotools}"
+if [ ! -d "$ROOT/engine/lib/libadrenotools/.git" ]; then
+    log "Fetching libadrenotools"
+    rm -rf "$ROOT/engine/lib/libadrenotools"
+    git clone --recursive "$ADRENOTOOLS_REPO" "$ROOT/engine/lib/libadrenotools"
+fi
+
 ##### Game assets #############################################################
 
 ASSETS_SRC="$CACHE_DIR/stk-assets"
@@ -236,8 +248,15 @@ for arch in $ARCHS; do
     # silently builds all four ABIs and then runs out of patience.
     ( cd "$ANDROID_DIR" && COMPILE_ARCH="$arch" ./make_deps.sh )
 
+    arch_deps="$REQUIRED_DEPS"
+    if [ "$abi" = "arm64-v8a" ]; then
+        # Android.mk links these only for arm64 (custom Vulkan driver loading).
+        arch_deps="$arch_deps libadrenotools/libadrenotools.a \
+libadrenotools/lib/linkernsbypass/liblinkernsbypass.a"
+    fi
+
     missing=""
-    for dep in $REQUIRED_DEPS; do
+    for dep in $arch_deps; do
         [ -f "$ANDROID_DIR/deps-$abi/$dep" ] || missing="$missing $dep"
     done
     if [ -n "$missing" ]; then
