@@ -31,6 +31,9 @@ jobs:
     name: APK (${{ matrix.abi }})
     runs-on: ubuntu-24.04
     timeout-minutes: 300
+    env:
+      # `secrets` is not a context step-level `if` can read; hoist the check.
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -103,7 +106,7 @@ jobs:
           key: stk-android-deps-${{ matrix.abi }}-${{ env.STK_NDK_VERSION }}-v1
 
       - name: Decode signing keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: env.HAS_KEYSTORE == 'true'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
