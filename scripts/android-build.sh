@@ -213,10 +213,16 @@ export APP_ICON_ADAPTIVE_FG_RELEASE="$BRAND_DIR/icon_adaptive_fg.png"
 
 ##### Build ###################################################################
 
-for arch in $ARCHS; do
-    log "Building native dependencies for $arch"
-    ( cd "$ANDROID_DIR" && ./make_deps.sh "$arch" )
-done
+# Android.mk links these as prebuilts. make_deps.sh swallows its own failures
+# (its check_error calls a bare `exit`, which exits 0), so a broken dependency
+# build shows up as "LOCAL_SRC_FILES points to a missing file" pages later —
+# check the outputs here instead.
+REQUIRED_DEPS="openal/libopenal.a libogg/libogg.a libvorbis/lib/libvorbis.a \
+libvorbis/lib/libvorbisfile.a curl/lib/libcurl.a mbedtls/library/libmbedtls.a \
+mbedtls/library/libmbedcrypto.a mbedtls/library/libmbedx509.a libjpeg/libjpeg.a \
+zlib/libz.a libpng/libpng.a freetype/build/libfreetype.a \
+harfbuzz/build/libharfbuzz.a shaderc/libshaderc/libshaderc_combined.a \
+libsquish/libsquish.a astc-encoder/Source/libastcenc.a"
 
 for arch in $ARCHS; do
     case "$arch" in
@@ -224,6 +230,22 @@ for arch in $ARCHS; do
         armv7|armeabi-v7a) abi=armeabi-v7a ;;
         *) abi="$arch" ;;
     esac
+
+    log "Building native dependencies for $abi"
+    # make_deps.sh reads COMPILE_ARCH, not $1 — passing the arch positionally
+    # silently builds all four ABIs and then runs out of patience.
+    ( cd "$ANDROID_DIR" && COMPILE_ARCH="$arch" ./make_deps.sh )
+
+    missing=""
+    for dep in $REQUIRED_DEPS; do
+        [ -f "$ANDROID_DIR/deps-$abi/$dep" ] || missing="$missing $dep"
+    done
+    if [ -n "$missing" ]; then
+        echo "make_deps.sh did not produce:$missing" >&2
+        echo "See the log above for the first failing dependency." >&2
+        exit 1
+    fi
+
     log "Building APK for $abi"
     ( cd "$ANDROID_DIR" && COMPILE_ARCH="$arch" ./make.sh "-j$(nproc)" )
 
