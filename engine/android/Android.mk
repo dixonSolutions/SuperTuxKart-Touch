@@ -272,6 +272,7 @@ LOCAL_CFLAGS       := -I../lib/irrlicht/source/Irrlicht/ \
                       -I../lib/irrlicht/include/         \
                       -I../src                           \
                       -Ideps-$(TARGET_ARCH_ABI)/libjpeg/ \
+                      -Ideps-$(TARGET_ARCH_ABI)/libjpeg/src/ \
                       -Ideps-$(TARGET_ARCH_ABI)/libpng/  \
                       -Ideps-$(TARGET_ARCH_ABI)/zlib/    \
                       -I../lib/sdl2/include/             \
