@@ -29,6 +29,39 @@ in-tree, caching it under `build/android/`:
 It then runs `make_deps.sh` (curl, freetype, harfbuzz, openal, vorbis … built
 from source per ABI — the slow part, ~40 min cold) and `make.sh`.
 
+`make_deps.sh` swallows its own failures — its `check_error` calls a bare `exit`,
+which exits 0 — so the build script verifies the prebuilts `Android.mk` links
+before handing over to gradle. Without that, a broken dependency surfaces
+minutes later as ndk-build complaining about a missing `.a`.
+
+### Pieces the dependency release does not carry
+
+`lib/libadrenotools` and `lib/mesa` are git submodules of stk-code rather than
+part of `dependencies-android-src.tar.xz`:
+
+* **libadrenotools** is linked unconditionally on arm64, so the build script
+  clones it.
+* **mesa** only supplies the bundled Turnip Vulkan driver for Adreno devices.
+  Building it needs a full mesa checkout and a meson cross build, so
+  `make_deps.sh` skips it when `lib/mesa` is absent. The APK then ships without
+  a bundled custom Vulkan driver; the game's own GLES and Vulkan paths are
+  unaffected.
+
+### Upstream builds that a current toolchain rejects
+
+The engine's Android dependency scripts predate NDK 27 and CMake 3.31, and
+several of them needed a nudge:
+
+* curl made libpsl a hard `find_package`, which has no business in an Android
+  static build — psl, idn2, brotli and zstd are now explicitly off.
+* libjpeg-turbo's 32-bit ARM NEON probe uses `HWCAP_ARM_NEON`, a name bionic
+  dropped in favour of `HWCAP_NEON`.
+* glslang exports a target set referencing SPIRV-Tools-opt; suppressing only
+  some of shaderc's nested install rules leaves that target in no export set,
+  which CMake 3.31 treats as an error.
+* astc-encoder defaults to `ASTCENC_ISA_NATIVE`, i.e. `-march=native`, which a
+  cross-compiler cannot honour.
+
 The NDK must be exactly the version the engine is tested against
 (`STK_NDK_VERSION`, currently 28.1.13356709); install it with
 `sdkmanager "ndk;28.1.13356709"`.
