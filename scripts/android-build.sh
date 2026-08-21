@@ -199,11 +199,32 @@ if [ ! -f "$ANDROID_DIR/assets/has_assets.txt" ]; then
       ./generate_assets.sh )
 fi
 
-# make.sh refuses to build unless the assets tree carries a marker file matching
-# PROJECT_VERSION; engine/data ships supertuxkart.git for the git series.
-if [ ! -f "$ANDROID_DIR/assets/data/supertuxkart.$PROJECT_VERSION" ]; then
-    printf '%s\n' "$APP_NAME_RELEASE" > "$ANDROID_DIR/assets/data/supertuxkart.$PROJECT_VERSION"
+# The engine locates its data directory by finding data/supertuxkart.<version>,
+# where <version> is the SUPERTUXKART_VERSION it was compiled with; engine/data
+# ships supertuxkart.git for the git series. make.sh refuses to build without a
+# matching marker, so create one.
+#
+# It also has to be listed in files.txt. AssetsAndroid::extractData() unpacks
+# exactly the paths that file names and nothing else, and generate_assets.sh
+# writes it as its last act — so a marker added afterwards ships inside the APK
+# but never reaches storage. The engine then cannot find its data directory,
+# Log::fatal closes the app, and the next launch sees .extracted without the
+# marker and extracts all over again: an install that loops forever on
+# "Extracting game data".
+MARKER="data/supertuxkart.$PROJECT_VERSION"
+if [ ! -f "$ANDROID_DIR/assets/$MARKER" ]; then
+    printf '%s\n' "$APP_NAME_RELEASE" > "$ANDROID_DIR/assets/$MARKER"
 fi
+if ! grep -qxF "$MARKER" "$ANDROID_DIR/assets/files.txt"; then
+    printf '%s\n' "$MARKER" >> "$ANDROID_DIR/assets/files.txt"
+fi
+
+# Belt and braces: the two have to agree, and the symptom of them disagreeing
+# only shows up on a device.
+test -f "$ANDROID_DIR/assets/$MARKER" \
+    || { echo "Missing asset marker $MARKER" >&2; exit 1; }
+grep -qxF "$MARKER" "$ANDROID_DIR/assets/files.txt" \
+    || { echo "$MARKER is not listed in files.txt — it would never be extracted" >&2; exit 1; }
 
 ##### Icons ###################################################################
 
