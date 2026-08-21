@@ -239,6 +239,8 @@ build_deps()
                 -DCURL_USE_MBEDTLS=ON -DUSE_ZLIB=ON -DCURL_USE_OPENSSL=OFF    \
                 -DCURL_USE_LIBSSH=OFF -DCURL_USE_LIBSSH2=OFF                  \
                 -DCURL_USE_GSSAPI=OFF -DUSE_NGHTTP2=OFF -DUSE_QUICHE=OFF      \
+                -DCURL_USE_LIBPSL=OFF -DUSE_LIBIDN2=OFF                       \
+                -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF                             \
                 -DHTTP_ONLY=ON -DCURL_CA_BUNDLE=none -DCURL_CA_PATH=none      \
                 -DENABLE_THREADED_RESOLVER=ON -DCMAKE_C_FLAGS="-fpic -O3 -g" &&
         make -j $(($(nproc) + 1))

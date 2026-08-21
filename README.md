@@ -8,6 +8,7 @@ Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phon
 | **Flatpak id** | `io.github.dixonSolutions.SuperTuxKartTouch` |
 | **Flatpak remote** | `supertuxtouch` |
 | **OpenStore / Click** | `supertuxkarttouch.dixonsolutions` |
+| **Android package** | `io.github.dixonsolutions.supertuxkarttouch` |
 | **Assets** | Karts bundled; tracks/music via first-launch download wizard |
 
 ## Quick install
@@ -25,6 +26,12 @@ pkcon install-local --allow-untrusted latest-arm64.click
 
 First launch opens an in-game setup dialog that downloads tracks/karts (~200 MB) into
 `~/.local/share/supertuxkart-touch/stk-assets/`.
+
+### Android (.apk)
+
+Sideload from [GitHub Releases](https://github.com/dixonSolutions/SuperTuxKart-Touch/releases/latest) — `arm64-v8a` for anything from the last decade, `armeabi-v7a` for older phones. Karts and tracks ride along in the APK, so there is no first-launch download.
+
+Local build: `ANDROID_SDK_ROOT=~/Android/Sdk ./scripts/android-build.sh --arch aarch64` — see [docs/ANDROID.md](docs/ANDROID.md).
 
 ### Linux Flatpak (remote)
 
@@ -84,10 +91,12 @@ STK_TOUCH_PERF=balanced flatpak run io.github.dixonSolutions.SuperTuxKartTouch
 | `packaging/start.sh` | Launcher: Flathub asset discover, glass overlay, perf |
 | `flatpak/` | Manifest, desktop, metainfo |
 | `click/` | Ubuntu Touch click metadata |
+| `scripts/android-build.sh` | Re-brands and drives the engine's own Android build |
 | `docs/` | Architecture, releases, media |
 
 ## Docs
 
+- [docs/ANDROID.md](docs/ANDROID.md) — Android APK: branding hooks, assets, signing
 - [docs/RELEASES.md](docs/RELEASES.md) — Flatpak + Click remotes, OpenStore
 - [docs/SETUP.md](docs/SETUP.md) — build & tablet run
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — design decisions
