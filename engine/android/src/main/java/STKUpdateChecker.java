@@ -57,6 +57,7 @@ public class STKUpdateChecker
         "org.supertuxkart.stk_dbg.INSTALL_STATUS";
 
     private final Activity m_activity;
+    private Update m_pending_update;
 
     public STKUpdateChecker(Activity activity)
     {
@@ -181,9 +182,11 @@ public class STKUpdateChecker
     {
         if (!canInstallPackages())
         {
+            m_pending_update = update;
             requestInstallPermission();
             return;
         }
+        m_pending_update = null;
         new Thread(new Runnable()
         {
             @Override
@@ -199,6 +202,12 @@ public class STKUpdateChecker
                 }
             }
         }, "stk-update-install").start();
+    }
+
+    void onResume()
+    {
+        if (m_pending_update != null && canInstallPackages())
+            startInstall(m_pending_update);
     }
 
     private void install(Update update) throws IOException
@@ -283,7 +292,8 @@ public class STKUpdateChecker
      */
     private PendingIntent installStatusIntent()
     {
-        m_activity.getApplicationContext().registerReceiver(new BroadcastReceiver()
+        Context application_context = m_activity.getApplicationContext();
+        BroadcastReceiver receiver = new BroadcastReceiver()
         {
             @Override
             public void onReceive(Context context, Intent intent)
@@ -314,13 +324,24 @@ public class STKUpdateChecker
                     // Already gone; the process may be restarting for the upgrade.
                 }
             }
-        }, new IntentFilter(INSTALL_ACTION));
+        };
+        IntentFilter filter = new IntentFilter(INSTALL_ACTION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        {
+            application_context.registerReceiver(receiver, filter,
+                Context.RECEIVER_NOT_EXPORTED);
+        }
+        else
+        {
+            application_context.registerReceiver(receiver, filter);
+        }
 
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             flags |= PendingIntent.FLAG_MUTABLE;
-        return PendingIntent.getBroadcast(m_activity.getApplicationContext(), 0,
-            new Intent(INSTALL_ACTION), flags);
+        Intent status = new Intent(INSTALL_ACTION);
+        status.setPackage(m_activity.getPackageName());
+        return PendingIntent.getBroadcast(application_context, 0, status, flags);
     }
 
     private SharedPreferences prefs()

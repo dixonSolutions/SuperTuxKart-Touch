@@ -65,6 +65,7 @@ public class SuperTuxKartActivity extends SDLActivity
     private ProgressBar m_progress_bar;
     private ImageView m_splash_screen;
     private STKEditText m_stk_edittext;
+    private STKUpdateChecker m_update_checker;
     private int m_bottom_y;
     private int m_intial_orientation;
     private float m_top_padding;
@@ -193,7 +194,8 @@ public class SuperTuxKartActivity extends SDLActivity
         super.onCreate(instance);
         // Sideloaded builds have no store behind them, so look for a newer
         // release. Runs on its own thread and never blocks the game.
-        new STKUpdateChecker(this).checkInBackground();
+        m_update_checker = new STKUpdateChecker(this);
+        m_update_checker.checkInBackground();
         m_keyboard_height = new AtomicInteger();
         m_moved_height = new AtomicInteger();
         m_progress_dialog = null;
@@ -281,6 +283,13 @@ public class SuperTuxKartActivity extends SDLActivity
         super.onStart();
         m_keyboard_height.set(0);
         m_moved_height.set(0);
+    }
+    // ------------------------------------------------------------------------
+    @Override
+    public void onResume()
+    {
+        super.onResume();
+        m_update_checker.onResume();
     }
     // ------------------------------------------------------------------------
     @Override
