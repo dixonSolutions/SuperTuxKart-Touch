@@ -74,9 +74,24 @@ if [ -z "$SDK_ROOT" ] || [ ! -d "$SDK_ROOT" ]; then
 fi
 SDK_ROOT="$(cd "$SDK_ROOT" && pwd)"
 
-NDK_ROOT="${ANDROID_NDK_ROOT:-$SDK_ROOT/ndk/$STK_NDK_VERSION}"
-if [ ! -d "$NDK_ROOT" ]; then
-    echo "Missing NDK $STK_NDK_VERSION at $NDK_ROOT — install it or set ANDROID_NDK_ROOT." >&2
+# The engine is pinned to one NDK revision. CI runners preset ANDROID_NDK_ROOT
+# to whatever they shipped with, so an SDK-managed copy of the pinned version
+# wins over the environment; ANDROID_NDK_ROOT is only trusted if it matches.
+ndk_revision() {
+    [ -f "$1/source.properties" ] || return 1
+    sed -n 's/^Pkg.Revision *= *//p' "$1/source.properties" | tr -d '\r'
+}
+
+NDK_ROOT=""
+if [ -d "$SDK_ROOT/ndk/$STK_NDK_VERSION" ]; then
+    NDK_ROOT="$SDK_ROOT/ndk/$STK_NDK_VERSION"
+elif [ -n "${ANDROID_NDK_ROOT:-}" ] && [ "$(ndk_revision "$ANDROID_NDK_ROOT" || true)" = "$STK_NDK_VERSION" ]; then
+    NDK_ROOT="$ANDROID_NDK_ROOT"
+fi
+if [ -z "$NDK_ROOT" ]; then
+    echo "Missing NDK $STK_NDK_VERSION — install it with:" >&2
+    echo "  sdkmanager \"ndk;$STK_NDK_VERSION\"" >&2
+    echo "Found instead: $(ls -1 "$SDK_ROOT/ndk" 2>/dev/null | tr '\n' ' ')${ANDROID_NDK_ROOT:+ (ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT)}" >&2
     exit 1
 fi
 NDK_ROOT="$(cd "$NDK_ROOT" && pwd)"
