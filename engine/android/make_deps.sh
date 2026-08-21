@@ -255,8 +255,12 @@ build_deps()
         cp -a -f "$DIRNAME/../lib/libjpeg/"* "$DIRNAME/deps-$ARCH_OPTION/libjpeg"
 
         cd "$DIRNAME/deps-$ARCH_OPTION/libjpeg"
+        # libjpeg-turbo's 32-bit ARM NEON probe wants HWCAP_ARM_NEON, a name the
+        # NDK's bionic headers no longer carry (it is HWCAP_NEON there). Supply
+        # the bit rather than dropping to -DWITH_SIMD=0 and losing NEON decode.
         cmake . -DCMAKE_TOOLCHAIN_FILE=../../../cmake/Toolchain-android.cmake \
-                -DHOST=$HOST -DARCH=$ARCH -DCMAKE_C_FLAGS="-fpic -O3 -g" &&
+                -DHOST=$HOST -DARCH=$ARCH \
+                -DCMAKE_C_FLAGS="-fpic -O3 -g -DHWCAP_ARM_NEON=4096" &&
         make -j $(($(nproc) + 1))
         check_error
         touch "$DIRNAME/deps-$ARCH_OPTION/libjpeg.stamp"
@@ -314,6 +318,7 @@ build_deps()
                 -DSPIRV_HEADERS_SKIP_INSTALL=1 -DSPIRV_HEADERS_SKIP_EXAMPLES=1 \
                 -DSKIP_SPIRV_TOOLS_INSTALL=1 -DSPIRV_SKIP_TESTS=1              \
                 -DSPIRV_SKIP_EXECUTABLES=1 -DENABLE_GLSLANG_BINARIES=0         \
+                -DSKIP_GLSLANG_INSTALL=1 -DGLSLANG_ENABLE_INSTALL=OFF          \
                 -DENABLE_CTEST=0 &&
         make -j $(($(nproc) + 1))
         # Strip debug symbol to make app bundle smaller
