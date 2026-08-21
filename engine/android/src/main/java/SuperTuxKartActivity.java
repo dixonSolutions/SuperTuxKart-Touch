@@ -191,6 +191,9 @@ public class SuperTuxKartActivity extends SDLActivity
     public void onCreate(Bundle instance)
     {
         super.onCreate(instance);
+        // Sideloaded builds have no store behind them, so look for a newer
+        // release. Runs on its own thread and never blocks the game.
+        new STKUpdateChecker(this).checkInBackground();
         m_keyboard_height = new AtomicInteger();
         m_moved_height = new AtomicInteger();
         m_progress_dialog = null;
