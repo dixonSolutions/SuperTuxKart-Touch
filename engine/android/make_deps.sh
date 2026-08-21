@@ -310,15 +310,20 @@ build_deps()
             touch "$DIRNAME/deps-$ARCH_OPTION/shaderc-deps.stamp"
         fi
         
+        # A stale cache from an earlier attempt would ignore the flags below.
+        rm -f CMakeCache.txt
+        # The skip-install flags upstream used are gone on purpose. glslang
+        # exports a target set that references SPIRV-Tools-opt, and suppressing
+        # only *some* of the install rules leaves that target in no export set,
+        # which CMake 3.31 rejects outright. Nothing here ever runs `install`,
+        # so generating the rules costs nothing and keeps the export sets whole.
         cmake . -DCMAKE_TOOLCHAIN_FILE=../../../cmake/Toolchain-android.cmake  \
                 -DHOST=$HOST -DARCH=$ARCH -DCMAKE_C_FLAGS="-fpic -O3"          \
-                -DCMAKE_CXX_FLAGS="-fpic -O3" -DSHADERC_SKIP_INSTALL=1         \
+                -DCMAKE_CXX_FLAGS="-fpic -O3"                                  \
                 -DCMAKE_BUILD_TYPE=Release                                     \
                 -DSHADERC_SKIP_TESTS=1 -DSHADERC_SKIP_EXAMPLES=1               \
-                -DSPIRV_HEADERS_SKIP_INSTALL=1 -DSPIRV_HEADERS_SKIP_EXAMPLES=1 \
-                -DSKIP_SPIRV_TOOLS_INSTALL=1 -DSPIRV_SKIP_TESTS=1              \
+                -DSPIRV_HEADERS_SKIP_EXAMPLES=1 -DSPIRV_SKIP_TESTS=1           \
                 -DSPIRV_SKIP_EXECUTABLES=1 -DENABLE_GLSLANG_BINARIES=0         \
-                -DSKIP_GLSLANG_INSTALL=1 -DGLSLANG_ENABLE_INSTALL=OFF          \
                 -DENABLE_CTEST=0 &&
         make -j $(($(nproc) + 1))
         # Strip debug symbol to make app bundle smaller
