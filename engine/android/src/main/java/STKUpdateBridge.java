@@ -122,6 +122,27 @@ public class STKUpdateBridge
                 "This is the newest build.");
     }
 
+    /**
+     * A check that could not reach the release feed.
+     *
+     * Deliberately not {@link #publishUpToDate}: findUpdate() answers "nothing
+     * newer" and "could not ask" with the same null, and publishing them alike
+     * tells a player on a flaky connection that they are current. Any release
+     * an earlier check found is kept, so one bad check does not take away the
+     * install it was offering.
+     */
+    public void publishCheckFailed(String installed, String known)
+    {
+        String message = "Could not reach the update server.";
+        if (known == null || known.isEmpty())
+        {
+            publish(STATE_ERROR, installed, "", 0, 0, message);
+            return;
+        }
+        publish(STATE_AVAILABLE, installed, known,
+                versionsBehind(installed, known), 0, message);
+    }
+
     public void publishAvailable(String installed, String latest)
     {
         publish(STATE_AVAILABLE, installed, latest,

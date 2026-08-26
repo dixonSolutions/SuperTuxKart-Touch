@@ -25,6 +25,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * On-launch update check against the project's GitHub Releases.
@@ -72,6 +73,8 @@ public class STKUpdateChecker
     private final STKUpdateBridge m_bridge;
     /** Last release the check found, so Install and Skip know what they mean. */
     private volatile Update m_last_seen;
+    /** Whether the last {@link #findUpdate()} reached the release feed at all. */
+    private volatile boolean m_check_failed;
     private Thread m_service;
 
     public STKUpdateChecker(Activity activity)
@@ -172,7 +175,13 @@ public class STKUpdateChecker
         }
         else if (request.equals("skip"))
         {
-            skipVersion(m_activity, m_last_seen == null ? null : m_last_seen.version);
+            Update target = targetUpdate(installed);
+            if (target == null)
+            {
+                publishFindings(installed, null);
+                return;
+            }
+            skipVersion(m_activity, target.version);
             m_last_seen = null;
             // Skip stays pressable while we wait for the install permission --
             // that state is not busy -- and onResume() installs whatever is
@@ -184,11 +193,7 @@ public class STKUpdateChecker
         else if (request.equals("check"))
         {
             m_bridge.publishChecking(installed);
-            m_last_seen = findUpdate();
-            if (m_last_seen == null)
-                m_bridge.publishUpToDate(installed);
-            else
-                m_bridge.publishAvailable(installed, m_last_seen.version);
+            publishFindings(installed, findUpdate());
         }
         else if (request.equals("install"))
         {
@@ -200,21 +205,59 @@ public class STKUpdateChecker
         }
     }
 
-    private void installFromMenu(String installed)
+    /**
+     * The release Install and Skip are acting on.
+     *
+     * The screen enables both from the published status, which the launch check
+     * may have written before the player ever reached Options -- and on a
+     * launch where that check failed, or where the status file is left over
+     * from a previous run, the field is empty when the press arrives. Look
+     * again rather than acting on nothing and then reporting success.
+     */
+    private Update targetUpdate(String installed)
     {
         Update update = m_last_seen;
         if (update == null)
         {
-            // The screen can ask to install before anything has been found -- a
-            // check that failed, or a status file left by a previous run. Look
-            // again rather than refusing.
             m_bridge.publishChecking(installed);
             update = findUpdate();
             m_last_seen = update;
         }
+        return update;
+    }
+
+    /**
+     * Publish what a check learned.
+     *
+     * A check that could not reach the feed has learned nothing, and saying
+     * "up to date" on its behalf both misinforms the player and drops the
+     * release the last successful check found -- which is the one thing on this
+     * screen they might have been about to install.
+     */
+    private void publishFindings(String installed, Update found)
+    {
+        if (found != null)
+        {
+            m_last_seen = found;
+            m_bridge.publishAvailable(installed, found.version);
+            return;
+        }
+        if (m_check_failed)
+        {
+            m_bridge.publishCheckFailed(installed,
+                m_last_seen == null ? null : m_last_seen.version);
+            return;
+        }
+        m_last_seen = null;
+        m_bridge.publishUpToDate(installed);
+    }
+
+    private void installFromMenu(String installed)
+    {
+        Update update = targetUpdate(installed);
         if (update == null)
         {
-            m_bridge.publishUpToDate(installed);
+            publishFindings(installed, null);
             return;
         }
         if (!canInstallPackages())
@@ -233,12 +276,31 @@ public class STKUpdateChecker
     }
 
     /** Install, and say so the whole way through, from either entry point. */
-    private void runInstall(Update update, String installed)
+    private void runInstall(final Update update, final String installed)
     {
+        // The failure callback below is a broadcast receiver, so it can land
+        // before install() has returned -- at once, if launching the confirm
+        // dialog throws. Publishing `installing` over it would put back the
+        // very state the callback exists to clear.
+        final AtomicBoolean failed = new AtomicBoolean();
         try
         {
-            install(update, installed);
-            m_bridge.publishInstalling(installed, update.version);
+            install(update, installed, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    // Dismissed at the system prompt, or refused outright.
+                    // Without this the status file stays on `installing` and
+                    // the Updates screen spends the rest of the session greyed
+                    // out behind a bar that never finishes.
+                    failed.set(true);
+                    m_bridge.publishError(installed,
+                        "Update failed. Try again later.");
+                }
+            });
+            if (!failed.get())
+                m_bridge.publishInstalling(installed, update.version);
         }
         catch (IOException | RuntimeException e)
         {
@@ -269,13 +331,15 @@ public class STKUpdateChecker
                 m_bridge.publishChecking(installed);
 
                 final Update update = findUpdate();
-                m_last_seen = update;
                 if (update == null)
                 {
-                    m_bridge.publishUpToDate(installed);
+                    // Not the same thing as "you have the newest build": a
+                    // check that never completed must not be published as one
+                    // that did.
+                    publishFindings(installed, null);
                     return;
                 }
-                m_bridge.publishAvailable(installed, update.version);
+                publishFindings(installed, update);
                 if (isAutoInstall(m_activity))
                 {
                     // Taking the automatic path means not stopping to ask. The
@@ -307,11 +371,22 @@ public class STKUpdateChecker
         }
     }
 
+    /**
+     * @return the newer release, or null when up to date, skipped, offline, or
+     *         the feed has no build for this device's ABI. Never throws: a
+     *         failed check must not stand between the player and the game.
+     *         {@code m_check_failed} tells the null that means "nothing to
+     *         install" from the one that means "could not ask".
+     */
     private Update findUpdate()
     {
+        m_check_failed = true;
         try
         {
             JSONObject release = new JSONObject(fetch(RELEASES_URL));
+            // Past this point every null is the feed's answer rather than our
+            // failure to get one.
+            m_check_failed = false;
             if (release.optBoolean("draft") || release.optBoolean("prerelease"))
                 return null;
 
@@ -378,6 +453,12 @@ public class STKUpdateChecker
                 {
                     prefs().edit()
                         .putString(PREF_SKIPPED_TAG, update.version).apply();
+                    // The status file still says `available` from the check a
+                    // moment ago. Left there, the Updates screen would spend
+                    // the session offering to install the release just
+                    // declined here.
+                    m_last_seen = null;
+                    m_bridge.publishUpToDate(installedVersion());
                 }
             })
             .show();
@@ -428,7 +509,15 @@ public class STKUpdateChecker
             && !url.contains("..");
     }
 
-    private void install(Update update, String installed) throws IOException
+    /**
+     * @param on_failure run when the install does not happen -- the system
+     *        prompt dismissed, the session rejected. The commit below returns
+     *        as soon as the session is handed over, not when the player has
+     *        confirmed it, so this callback is the only thing that ever learns
+     *        the difference.
+     */
+    private void install(Update update, String installed, Runnable on_failure)
+        throws IOException
     {
         // Checked again at the point of use, not only where the URL was picked:
         // these bytes go straight into a PackageInstaller session, so this is the
@@ -503,7 +592,7 @@ public class STKUpdateChecker
             {
                 connection.disconnect();
             }
-            session.commit(installStatusIntent().getIntentSender());
+            session.commit(installStatusIntent(on_failure).getIntentSender());
             committed = true;
         }
         finally
@@ -553,7 +642,7 @@ public class STKUpdateChecker
      * STATUS_PENDING_USER_ACTION, which carries the system's confirm dialog for
      * us to launch — without starting it the session just sits there.
      */
-    private PendingIntent installStatusIntent()
+    private PendingIntent installStatusIntent(final Runnable on_failure)
     {
         Context application_context = m_activity.getApplicationContext();
         BroadcastReceiver receiver = new BroadcastReceiver()
@@ -568,9 +657,20 @@ public class STKUpdateChecker
                     Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
                     if (confirm != null)
                     {
-                        confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        context.startActivity(confirm);
+                        try
+                        {
+                            confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            context.startActivity(confirm);
+                            return;
+                        }
+                        catch (RuntimeException e)
+                        {
+                            // A receiver that throws takes the process with it,
+                            // and the install is not happening either way.
+                            Log.w(TAG, "Could not open install confirmation", e);
+                        }
                     }
+                    finish(context, true);
                     return;
                 }
                 if (status != PackageInstaller.STATUS_SUCCESS)
@@ -578,6 +678,11 @@ public class STKUpdateChecker
                     Log.w(TAG, "Install failed (" + status + "): " +
                         intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
                 }
+                finish(context, status != PackageInstaller.STATUS_SUCCESS);
+            }
+
+            private void finish(Context context, boolean failed)
+            {
                 try
                 {
                     context.unregisterReceiver(this);
@@ -586,6 +691,8 @@ public class STKUpdateChecker
                 {
                     // Already gone; the process may be restarting for the upgrade.
                 }
+                if (failed && on_failure != null)
+                    on_failure.run();
             }
         };
         IntentFilter filter = new IntentFilter(INSTALL_ACTION);
