@@ -143,6 +143,28 @@ public class STKUpdateBridge
                 versionsBehind(installed, known), 0, message);
     }
 
+    /**
+     * An install that did not happen: cancelled at the system prompt, or
+     * refused.
+     *
+     * Deliberately not {@link #publishError}: that carries no latest version
+     * and nothing behind, and the Updates screen gates Install and Skip on
+     * exactly those. Cancelling the confirm dialog is a thing players do on
+     * purpose, so it has to leave behind the button that starts the install
+     * again -- with the failure said in the message rather than in a state that
+     * disables the way out of it.
+     */
+    public void publishInstallFailed(String installed, String latest, String message)
+    {
+        if (latest == null || latest.isEmpty())
+        {
+            publish(STATE_ERROR, installed, "", 0, 0, message);
+            return;
+        }
+        publish(STATE_AVAILABLE, installed, latest,
+                versionsBehind(installed, latest), 0, message);
+    }
+
     public void publishAvailable(String installed, String latest)
     {
         publish(STATE_AVAILABLE, installed, latest,

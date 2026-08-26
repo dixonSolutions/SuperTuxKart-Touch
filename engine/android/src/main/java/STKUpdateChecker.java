@@ -73,8 +73,6 @@ public class STKUpdateChecker
     private final STKUpdateBridge m_bridge;
     /** Last release the check found, so Install and Skip know what they mean. */
     private volatile Update m_last_seen;
-    /** Whether the last {@link #findUpdate()} reached the release feed at all. */
-    private volatile boolean m_check_failed;
     private Thread m_service;
 
     public STKUpdateChecker(Activity activity)
@@ -175,13 +173,13 @@ public class STKUpdateChecker
         }
         else if (request.equals("skip"))
         {
-            Update target = targetUpdate(installed);
-            if (target == null)
+            CheckResult target = targetUpdate(installed);
+            if (target.m_update == null)
             {
-                publishFindings(installed, null);
+                publishFindings(installed, target);
                 return;
             }
-            skipVersion(m_activity, target.version);
+            skipVersion(m_activity, target.m_update.version);
             m_last_seen = null;
             // Skip stays pressable while we wait for the install permission --
             // that state is not busy -- and onResume() installs whatever is
@@ -214,16 +212,16 @@ public class STKUpdateChecker
      * from a previous run, the field is empty when the press arrives. Look
      * again rather than acting on nothing and then reporting success.
      */
-    private Update targetUpdate(String installed)
+    private CheckResult targetUpdate(String installed)
     {
         Update update = m_last_seen;
-        if (update == null)
-        {
-            m_bridge.publishChecking(installed);
-            update = findUpdate();
-            m_last_seen = update;
-        }
-        return update;
+        if (update != null)
+            return new CheckResult(update, false);
+
+        m_bridge.publishChecking(installed);
+        CheckResult result = findUpdate();
+        m_last_seen = result.m_update;
+        return result;
     }
 
     /**
@@ -234,15 +232,15 @@ public class STKUpdateChecker
      * release the last successful check found -- which is the one thing on this
      * screen they might have been about to install.
      */
-    private void publishFindings(String installed, Update found)
+    private void publishFindings(String installed, CheckResult result)
     {
-        if (found != null)
+        if (result.m_update != null)
         {
-            m_last_seen = found;
-            m_bridge.publishAvailable(installed, found.version);
+            m_last_seen = result.m_update;
+            m_bridge.publishAvailable(installed, result.m_update.version);
             return;
         }
-        if (m_check_failed)
+        if (result.m_failed)
         {
             m_bridge.publishCheckFailed(installed,
                 m_last_seen == null ? null : m_last_seen.version);
@@ -254,10 +252,11 @@ public class STKUpdateChecker
 
     private void installFromMenu(String installed)
     {
-        Update update = targetUpdate(installed);
+        CheckResult target = targetUpdate(installed);
+        Update update = target.m_update;
         if (update == null)
         {
-            publishFindings(installed, null);
+            publishFindings(installed, target);
             return;
         }
         if (!canInstallPackages())
@@ -294,8 +293,14 @@ public class STKUpdateChecker
                     // Without this the status file stays on `installing` and
                     // the Updates screen spends the rest of the session greyed
                     // out behind a bar that never finishes.
+                    //
+                    // Not publishError: that writes no latest version and
+                    // nothing behind, and the screen gates Install and Skip on
+                    // exactly that -- so cancelling the confirm dialog, which
+                    // is a thing players do on purpose, would take away the
+                    // button that starts it again.
                     failed.set(true);
-                    m_bridge.publishError(installed,
+                    m_bridge.publishInstallFailed(installed, update.version,
                         "Update failed. Try again later.");
                 }
             });
@@ -304,8 +309,11 @@ public class STKUpdateChecker
         }
         catch (IOException | RuntimeException e)
         {
+            // Same reasoning as the callback above: a download that broke off
+            // is a reason to offer the retry, not to take it away.
             Log.w(TAG, "Update install failed", e);
-            m_bridge.publishError(installed, String.valueOf(e.getMessage()));
+            m_bridge.publishInstallFailed(installed, update.version,
+                String.valueOf(e.getMessage()));
         }
     }
 
@@ -330,16 +338,13 @@ public class STKUpdateChecker
                 // where the check finds nothing or never returns.
                 m_bridge.publishChecking(installed);
 
-                final Update update = findUpdate();
+                final CheckResult result = findUpdate();
+                final Update update = result.m_update;
+                // Publishes "up to date" only for a check that got that answer;
+                // one that never completed is published as the failure it was.
+                publishFindings(installed, result);
                 if (update == null)
-                {
-                    // Not the same thing as "you have the newest build": a
-                    // check that never completed must not be published as one
-                    // that did.
-                    publishFindings(installed, null);
                     return;
-                }
-                publishFindings(installed, update);
                 if (isAutoInstall(m_activity))
                 {
                     // Taking the automatic path means not stopping to ask. The
@@ -357,6 +362,29 @@ public class STKUpdateChecker
         }, "stk-update-check").start();
     }
 
+    /**
+     * One check's answer: the release, and whether we got to ask at all.
+     *
+     * Carried back per call rather than left in a field. The launch check and
+     * the request service both run findUpdate() on their own threads -- a
+     * request file left over from a previous run is served within a second of
+     * startup, while the launch check is still in flight -- and a shared flag
+     * lets the successful one clear the failing one's, which then publishes
+     * "up to date" and drops the release the other just found.
+     */
+    private static class CheckResult
+    {
+        final Update m_update;
+        /** True when the check never reached the feed: offline, bad response. */
+        final boolean m_failed;
+
+        CheckResult(Update update, boolean failed)
+        {
+            m_update = update;
+            m_failed = failed;
+        }
+    }
+
     private static class Update
     {
         final String version;
@@ -372,60 +400,76 @@ public class STKUpdateChecker
     }
 
     /**
-     * @return the newer release, or null when up to date, skipped, offline, or
-     *         the feed has no build for this device's ABI. Never throws: a
-     *         failed check must not stand between the player and the game.
-     *         {@code m_check_failed} tells the null that means "nothing to
-     *         install" from the one that means "could not ask".
+     * @return the newer release, or a null one when up to date, skipped,
+     *         offline, or the feed has no build for this device's ABI. Never
+     *         throws: a failed check must not stand between the player and the
+     *         game. {@link CheckResult#m_failed} tells the null that means
+     *         "nothing to install" from the one that means "could not ask".
      */
-    private Update findUpdate()
+    private CheckResult findUpdate()
     {
-        m_check_failed = true;
         try
         {
-            JSONObject release = new JSONObject(fetch(RELEASES_URL));
-            // Past this point every null is the feed's answer rather than our
-            // failure to get one.
-            m_check_failed = false;
-            if (release.optBoolean("draft") || release.optBoolean("prerelease"))
-                return null;
-
-            String tag = release.optString("tag_name", "");
-            String version = tag.startsWith("v") ? tag.substring(1) : tag;
-            if (version.isEmpty())
-                return null;
-            if (compareVersions(version, installedVersion()) <= 0)
-                return null;
-            if (version.equals(prefs().getString(PREF_SKIPPED_TAG, null)))
-                return null;
-
-            JSONArray assets = release.optJSONArray("assets");
-            if (assets == null)
-                return null;
-            for (String abi : Build.SUPPORTED_ABIS)
-            {
-                for (int i = 0; i < assets.length(); i++)
-                {
-                    JSONObject asset = assets.getJSONObject(i);
-                    String name = asset.optString("name", "");
-                    String url = asset.optString("browser_download_url", "");
-                    if (!name.endsWith(".apk") || !name.contains(abi))
-                        continue;
-                    if (!isTrustedApkUrl(url))
-                    {
-                        Log.w(TAG, "Ignoring release asset with an untrusted URL: " + url);
-                        continue;
-                    }
-                    return new Update(version, url, asset.optLong("size", -1));
-                }
-            }
-            Log.i(TAG, "Release " + version + " has no build for " +
-                Build.SUPPORTED_ABIS[0]);
+            return new CheckResult(queryFeed(), false);
         }
         catch (Exception e)
         {
+            // Never rethrown: a failed update check must not stand between the
+            // player and the game. It is reported instead, so a caller does not
+            // mistake it for "there is nothing newer".
             Log.i(TAG, "Update check skipped: " + e);
+            return new CheckResult(null, true);
         }
+    }
+
+    /**
+     * Ask the release feed.
+     *
+     * @return the newer release, or null when the feed's answer is that there
+     *         is nothing to install -- newest build, skipped by the player, or
+     *         no build for this device's ABI.
+     * @throws Exception when the feed could not be reached or made sense of.
+     *         Thrown rather than returned as another null, because the two mean
+     *         opposite things to the screen: one is an answer, the other is the
+     *         absence of one.
+     */
+    private Update queryFeed() throws Exception
+    {
+        JSONObject release = new JSONObject(fetch(RELEASES_URL));
+        if (release.optBoolean("draft") || release.optBoolean("prerelease"))
+            return null;
+
+        String tag = release.optString("tag_name", "");
+        String version = tag.startsWith("v") ? tag.substring(1) : tag;
+        if (version.isEmpty())
+            return null;
+        if (compareVersions(version, installedVersion()) <= 0)
+            return null;
+        if (version.equals(prefs().getString(PREF_SKIPPED_TAG, null)))
+            return null;
+
+        JSONArray assets = release.optJSONArray("assets");
+        if (assets == null)
+            return null;
+        for (String abi : Build.SUPPORTED_ABIS)
+        {
+            for (int i = 0; i < assets.length(); i++)
+            {
+                JSONObject asset = assets.getJSONObject(i);
+                String name = asset.optString("name", "");
+                String url = asset.optString("browser_download_url", "");
+                if (!name.endsWith(".apk") || !name.contains(abi))
+                    continue;
+                if (!isTrustedApkUrl(url))
+                {
+                    Log.w(TAG, "Ignoring release asset with an untrusted URL: " + url);
+                    continue;
+                }
+                return new Update(version, url, asset.optLong("size", -1));
+            }
+        }
+        Log.i(TAG, "Release " + version + " has no build for " +
+            Build.SUPPORTED_ABIS[0]);
         return null;
     }
 
