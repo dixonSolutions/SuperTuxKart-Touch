@@ -59,16 +59,177 @@ public class STKUpdateChecker
     private static final String PREFS = "stk_updates";
     private static final String PREF_ENABLED = "check_on_launch";
     private static final String PREF_SKIPPED_TAG = "skipped_tag";
+    /** Whether a release we find installs without stopping to ask first. */
+    private static final String PREF_AUTO_INSTALL = "auto_install";
 
     private static final String INSTALL_ACTION =
         "org.supertuxkart.stk_dbg.INSTALL_STATUS";
 
     private final Activity m_activity;
     private Update m_pending_update;
+    private final STKUpdateBridge m_bridge;
+    /** Last release the check found, so Install and Skip know what they mean. */
+    private volatile Update m_last_seen;
+    private Thread m_service;
 
     public STKUpdateChecker(Activity activity)
     {
         m_activity = activity;
+        m_bridge = new STKUpdateBridge(activity);
+    }
+
+    /**
+     * Opt-out, so a player who never opens Options still gets fixes.
+     *
+     * Turning this off does not stop the check -- the Updates screen still has
+     * to be able to say how far behind you are -- it stops the install
+     * happening without being asked for. Android confirms every package
+     * install either way, so even "automatic" is one tap, not none.
+     */
+    public static boolean isAutoInstall(Context context)
+    {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AUTO_INSTALL, true);
+    }
+
+    public static void setAutoInstall(Context context, boolean enabled)
+    {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(PREF_AUTO_INSTALL, enabled).apply();
+    }
+
+    /** Suppress one release by version, for the Updates screen's Skip button. */
+    public static void skipVersion(Context context, String version)
+    {
+        if (version == null || version.isEmpty())
+            return;
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(PREF_SKIPPED_TAG, version).apply();
+    }
+
+    /**
+     * Serve the Updates screen's requests for as long as the game runs.
+     *
+     * Without this every button on that screen would write a request file that
+     * nothing ever reads: the launch-time check has long finished by the time
+     * anyone can reach Options. A poll rather than a watch -- the writer is C++
+     * using plain ofstream, and a second of latency on a button that starts a
+     * 30 MB download does not justify a FileObserver.
+     */
+    public void startRequestService()
+    {
+        if (m_service != null && m_service.isAlive())
+            return;
+
+        m_service = new Thread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                while (!Thread.currentThread().isInterrupted())
+                {
+                    try
+                    {
+                        Thread.sleep(1000);
+                    }
+                    catch (InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    String request = m_bridge.takeRequest();
+                    if (request != null)
+                        serveRequest(request);
+                }
+            }
+        }, "stk-update-service");
+        m_service.setDaemon(true);
+        m_service.start();
+    }
+
+    public void stopRequestService()
+    {
+        if (m_service != null)
+        {
+            m_service.interrupt();
+            m_service = null;
+        }
+    }
+
+    private void serveRequest(String request)
+    {
+        String installed = installedVersion();
+        if (request.equals("auto-on"))
+        {
+            setAutoInstall(m_activity, true);
+            // Republish so line 8 carries the new preference at once; the
+            // screen reads its checkbox back from there.
+            m_bridge.publishIdle(installed);
+        }
+        else if (request.equals("auto-off"))
+        {
+            setAutoInstall(m_activity, false);
+            m_bridge.publishIdle(installed);
+        }
+        else if (request.equals("skip"))
+        {
+            skipVersion(m_activity, m_last_seen == null ? null : m_last_seen.version);
+            m_last_seen = null;
+            m_bridge.publishUpToDate(installed);
+        }
+        else if (request.equals("check"))
+        {
+            m_bridge.publishChecking(installed);
+            m_last_seen = findUpdate();
+            if (m_last_seen == null)
+                m_bridge.publishUpToDate(installed);
+            else
+                m_bridge.publishAvailable(installed, m_last_seen.version);
+        }
+        else if (request.equals("install"))
+        {
+            installFromMenu(installed);
+        }
+        else
+        {
+            Log.w(TAG, "Ignoring unknown update request: " + request);
+        }
+    }
+
+    private void installFromMenu(String installed)
+    {
+        Update update = m_last_seen;
+        if (update == null)
+        {
+            // The screen can ask to install before anything has been found -- a
+            // check that failed, or a status file left by a previous run. Look
+            // again rather than refusing.
+            m_bridge.publishChecking(installed);
+            update = findUpdate();
+            m_last_seen = update;
+        }
+        if (update == null)
+        {
+            m_bridge.publishUpToDate(installed);
+            return;
+        }
+        final String latest = update.version;
+        try
+        {
+            if (!canInstallPackages())
+            {
+                requestInstallPermission();
+                m_bridge.publishNeedsPermission(installed, latest);
+                return;
+            }
+            install(update);
+            m_bridge.publishInstalling(installed, latest);
+        }
+        catch (IOException | RuntimeException e)
+        {
+            Log.w(TAG, "Update install failed", e);
+            m_bridge.publishError(installed, String.valueOf(e.getMessage()));
+        }
     }
 
     /**
@@ -86,9 +247,28 @@ public class STKUpdateChecker
             @Override
             public void run()
             {
+                final String installed = installedVersion();
+                // Publish before asking. The Updates screen draws its version
+                // from this file, and that has to be right even on the launches
+                // where the check finds nothing or never returns.
+                m_bridge.publishChecking(installed);
+
                 final Update update = findUpdate();
+                m_last_seen = update;
                 if (update == null)
+                {
+                    m_bridge.publishUpToDate(installed);
                     return;
+                }
+                m_bridge.publishAvailable(installed, update.version);
+                if (isAutoInstall(m_activity))
+                {
+                    // Taking the automatic path means not stopping to ask. The
+                    // system installer still confirms, so this is not an
+                    // unattended install -- just one fewer dialog before it.
+                    installFromMenu(installed);
+                    return;
+                }
                 m_activity.runOnUiThread(new Runnable()
                 {
                     @Override

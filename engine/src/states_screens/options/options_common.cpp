@@ -42,6 +42,8 @@ namespace OptionsCommon
             screen = OptionsScreenGeneral::getInstance();
         else if (selected_tab == "tab_language")
             screen = OptionsScreenLanguage::getInstance();
+        else if (selected_tab == "tab_updates")
+            screen = OptionsScreenUpdates::getInstance();
         if(screen)
             StateManager::get()->replaceTopMostScreen(screen);
     }

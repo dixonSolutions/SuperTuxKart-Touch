@@ -98,6 +98,41 @@ by tag shape (`vX.Y.Z`) and asset filename (must contain the ABI), and both are
 conventions rather than contracts: renaming the APKs would strand every install
 on its current build with no error anywhere.
 
+### The in-game Updates screen
+
+`STKUpdateChecker` can only ask its question once, at launch, in a dialog that
+is gone before anyone is racing. Everything a player wants afterwards — which
+build am I on, how far behind, check again, stop asking — lives in
+**Options → Updates** instead.
+
+Options is C++ and the updater is Java, so rather than reach across that with
+JNI the two halves pass line-based files through the app's files directory.
+`STKUpdateBridge` owns `update-status.txt` and only writes it; the C++ side owns
+`update-request.txt` and only writes that. Neither reads its own file back, so
+there is no shared state to race over — a torn read costs one stale second and
+the screen re-reads on a timer.
+
+That directory is `getFilesDir()` rather than STK's config directory on purpose.
+The config path is assembled in `assets_android.cpp` from `HOME` plus
+`.config/supertuxkart`, and duplicating that derivation in Java would be a
+second copy to get wrong; both sides name this one by construction, C++ through
+SDL's internal storage path.
+
+The format is documented once, in `src/utils/touch_update_status.hpp`. Requests
+are `check`, `install`, `skip`, `auto-on` and `auto-off`, served by a poll
+thread `SuperTuxKartActivity` starts for the life of the process — without one,
+every button on that screen would write a file nothing ever reads.
+
+Auto-update is opt-out, so a player who never opens Options still gets fixes.
+Turning it off does not stop the check — the screen still has to say how far
+behind you are — it stops the install happening without being asked for. Android
+confirms every package install either way, so even "automatic" is one tap rather
+than none.
+
+Xonotic Touch runs the identical contract between its Java updater and its
+QuakeC menu. The two projects' file formats are the same by intent; keep them in
+step.
+
 ### What the updater will and will not install
 
 The three Touch projects (this one, Xonotic Touch and Potato Tomato) share one
