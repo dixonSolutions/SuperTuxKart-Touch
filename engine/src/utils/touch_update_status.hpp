@@ -107,7 +107,9 @@ namespace TouchUpdate
 
     /** Read the status file. Safe when it is absent, truncated or a format we
      *  do not recognise -- all three come back as an unpublished Status rather
-     *  than a guess at the version, which is the one thing worse than "unknown". */
+     *  than a guess at the version, which is the one thing worse than
+     *  "unknown". On a platform with no updater behind that file at all, that
+     *  Status is STATE_MANAGED, because that is the true answer there. */
     Status read();
 
     /** Leave one token for the platform layer: check, install, skip, auto-on,

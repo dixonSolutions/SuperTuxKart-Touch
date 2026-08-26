@@ -66,7 +66,9 @@ public class STKUpdateChecker
         "org.supertuxkart.stk_dbg.INSTALL_STATUS";
 
     private final Activity m_activity;
-    private Update m_pending_update;
+    /** Set on whichever thread starts an install, read by onResume() on the UI
+     *  thread, so it has to be published across both. */
+    private volatile Update m_pending_update;
     private final STKUpdateBridge m_bridge;
     /** Last release the check found, so Install and Skip know what they mean. */
     private volatile Update m_last_seen;
@@ -159,17 +161,14 @@ public class STKUpdateChecker
     private void serveRequest(String request)
     {
         String installed = installedVersion();
-        if (request.equals("auto-on"))
+        if (request.equals("auto-on") || request.equals("auto-off"))
         {
-            setAutoInstall(m_activity, true);
+            setAutoInstall(m_activity, request.equals("auto-on"));
             // Republish so line 8 carries the new preference at once; the
-            // screen reads its checkbox back from there.
-            m_bridge.publishIdle(installed);
-        }
-        else if (request.equals("auto-off"))
-        {
-            setAutoInstall(m_activity, false);
-            m_bridge.publishIdle(installed);
+            // screen reads its checkbox back from there. Only that line
+            // changes: a preference is no reason to forget a release we have
+            // already found, or to unlock the buttons mid-download.
+            m_bridge.republish(installed);
         }
         else if (request.equals("skip"))
         {
@@ -213,17 +212,28 @@ public class STKUpdateChecker
             m_bridge.publishUpToDate(installed);
             return;
         }
-        final String latest = update.version;
+        if (!canInstallPackages())
+        {
+            // onResume() is what carries an install across the trip to the
+            // settings screen, and it only retries an update left pending
+            // here. Without this the player grants the permission, comes back,
+            // and nothing happens.
+            m_pending_update = update;
+            requestInstallPermission();
+            m_bridge.publishNeedsPermission(installed, update.version);
+            return;
+        }
+        m_pending_update = null;
+        runInstall(update, installed);
+    }
+
+    /** Install, and say so the whole way through, from either entry point. */
+    private void runInstall(Update update, String installed)
+    {
         try
         {
-            if (!canInstallPackages())
-            {
-                requestInstallPermission();
-                m_bridge.publishNeedsPermission(installed, latest);
-                return;
-            }
-            install(update);
-            m_bridge.publishInstalling(installed, latest);
+            install(update, installed);
+            m_bridge.publishInstalling(installed, update.version);
         }
         catch (IOException | RuntimeException e)
         {
@@ -380,17 +390,7 @@ public class STKUpdateChecker
         new Thread(new Runnable()
         {
             @Override
-            public void run()
-            {
-                try
-                {
-                    install(update);
-                }
-                catch (Exception e)
-                {
-                    Log.w(TAG, "Update install failed", e);
-                }
-            }
+            public void run() { runInstall(update, installedVersion()); }
         }, "stk-update-install").start();
     }
 
@@ -423,13 +423,19 @@ public class STKUpdateChecker
             && !url.contains("..");
     }
 
-    private void install(Update update) throws IOException
+    private void install(Update update, String installed) throws IOException
     {
         // Checked again at the point of use, not only where the URL was picked:
         // these bytes go straight into a PackageInstaller session, so this is the
         // difference between updating this app and installing an arbitrary APK.
         if (!isTrustedApkUrl(update.url))
             throw new IOException("refusing to install an untrusted APK URL");
+
+        // Claim the busy state before the first byte moves. The Updates screen
+        // gates Install and Skip on what is published here, so a download that
+        // says nothing leaves the screen looking idle -- and one tap away from
+        // starting a second one -- for its entire length.
+        m_bridge.publishDownloading(installed, update.version, 0);
 
         PackageInstaller installer =
             m_activity.getPackageManager().getPackageInstaller();
@@ -461,9 +467,25 @@ public class STKUpdateChecker
                 try
                 {
                     byte[] buffer = new byte[64 * 1024];
+                    long written = 0;
+                    // Publish only when the whole number changes: each one is
+                    // a file write and a rename, and the screen reads it once
+                    // a second.
+                    int published = 0;
                     int read;
                     while ((read = in.read(buffer)) > 0)
+                    {
                         out.write(buffer, 0, read);
+                        written += read;
+                        int percent = total > 0 ?
+                            (int)(written * 100 / total) : 0;
+                        if (percent != published)
+                        {
+                            published = percent;
+                            m_bridge.publishDownloading(installed,
+                                update.version, percent);
+                        }
+                    }
                     session.fsync(out);
                 }
                 finally

@@ -291,14 +291,14 @@ public class SuperTuxKartActivity extends SDLActivity
     }
     // ------------------------------------------------------------------------
     @Override
-    @Override
     public void onDestroy()
     {
         if (m_update_checker != null)
             m_update_checker.stopRequestService();
         super.onDestroy();
     }
-
+    // ------------------------------------------------------------------------
+    @Override
     public void onResume()
     {
         super.onResume();

@@ -84,6 +84,13 @@ namespace
 TouchUpdate::Status TouchUpdate::read()
 {
     Status status;
+#ifndef ANDROID
+    // No platform layer here writes the status file, and none would serve what
+    // the screen asked of it: whoever installed this build owns updating it.
+    // Start from that answer, so everything we cannot read leaves it standing
+    // rather than an updater the player can drive but nothing is behind.
+    status.m_state = STATE_MANAGED;
+#endif
 
     std::string path = updateFilePath(STATUS_FILE);
     std::ifstream in(FileUtils::getPortableReadingPath(path).c_str());

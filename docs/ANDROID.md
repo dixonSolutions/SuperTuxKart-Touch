@@ -123,6 +123,11 @@ are `check`, `install`, `skip`, `auto-on` and `auto-off`, served by a poll
 thread `SuperTuxKartActivity` starts for the life of the process — without one,
 every button on that screen would write a file nothing ever reads.
 
+Every other platform has no half to serve those requests, so `TouchUpdate::read`
+answers `managed` there. The tab still names the build you are on and says to
+update it the way you installed it, rather than offering buttons nothing is
+behind.
+
 Auto-update is opt-out, so a player who never opens Options still gets fixes.
 Turning it off does not stop the check — the screen still has to say how far
 behind you are — it stops the install happening without being asked for. Android

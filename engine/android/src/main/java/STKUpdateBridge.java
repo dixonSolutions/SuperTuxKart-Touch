@@ -55,6 +55,14 @@ public class STKUpdateBridge
     private final File m_status_file;
     private final File m_request_file;
 
+    /** The last record written. Kept so a preference change can rewrite line 8
+     *  on its own; we still never read the file back. */
+    private String m_state = STATE_IDLE;
+    private String m_latest = "";
+    private int m_behind;
+    private int m_percent;
+    private String m_message = "";
+
     public STKUpdateBridge(Context context)
     {
         m_context = context.getApplicationContext();
@@ -147,6 +155,18 @@ public class STKUpdateBridge
     }
 
     /**
+     * Write the last record again, so line 8 carries the current preference.
+     *
+     * Toggling automatic updates changes that line and nothing else. Publishing
+     * a fresh idle record instead would drop the release we have already found,
+     * and the screen would sit empty until another check ran.
+     */
+    public synchronized void republish(String installed)
+    {
+        publish(m_state, installed, m_latest, m_behind, m_percent, m_message);
+    }
+
+    /**
      * How many releases behind the installed build is.
      *
      * Tags are X.Y.Z and only the patch component moves between builds, so the
@@ -173,9 +193,18 @@ public class STKUpdateBridge
         }
     }
 
-    private void publish(String state, String installed, String latest,
-                         int behind, int percent, String message)
+    // Synchronized because the check, service and install threads all publish,
+    // and they share both these fields and one temporary file to rename from.
+    private synchronized void publish(String state, String installed,
+                                      String latest, int behind, int percent,
+                                      String message)
     {
+        m_state = state;
+        m_latest = latest;
+        m_behind = behind;
+        m_percent = percent;
+        m_message = message;
+
         StringBuilder out = new StringBuilder()
             .append(FORMAT).append('\n')
             .append(state).append('\n')
