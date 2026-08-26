@@ -294,11 +294,11 @@ public class STKUpdateChecker
                     // the Updates screen spends the rest of the session greyed
                     // out behind a bar that never finishes.
                     //
-                    // Not publishError: that writes no latest version and
-                    // nothing behind, and the screen gates Install and Skip on
-                    // exactly that -- so cancelling the confirm dialog, which
-                    // is a thing players do on purpose, would take away the
-                    // button that starts it again.
+                    // Not a bare `error` record: that writes no latest
+                    // version and nothing behind, and the screen gates Install
+                    // and Skip on exactly that -- so cancelling the confirm
+                    // dialog, which is a thing players do on purpose, would
+                    // take away the button that starts it again.
                     failed.set(true);
                     m_bridge.publishInstallFailed(installed, update.version,
                         "Update failed. Try again later.");

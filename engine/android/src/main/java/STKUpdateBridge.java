@@ -147,7 +147,7 @@ public class STKUpdateBridge
      * An install that did not happen: cancelled at the system prompt, or
      * refused.
      *
-     * Deliberately not {@link #publishError}: that carries no latest version
+     * Deliberately not a bare `error` record: that carries no latest version
      * and nothing behind, and the Updates screen gates Install and Skip on
      * exactly those. Cancelling the confirm dialog is a thing players do on
      * purpose, so it has to leave behind the button that starts the install
@@ -190,11 +190,6 @@ public class STKUpdateBridge
         publish(STATE_NEEDS_PERMISSION, installed, latest,
                 versionsBehind(installed, latest), 100,
                 "Allow installing apps from SuperTuxKart to finish.");
-    }
-
-    public void publishError(String installed, String message)
-    {
-        publish(STATE_ERROR, installed, "", 0, 0, message);
     }
 
     /**
