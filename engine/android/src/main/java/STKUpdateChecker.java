@@ -46,8 +46,11 @@ public class STKUpdateChecker
 {
     private static final String TAG = "STKUpdateChecker";
 
+    /** Only release assets of this repo are ever downloaded or installed. */
+    private static final String REPO = "dixonSolutions/SuperTuxKart-Touch";
+
     private static final String RELEASES_URL =
-        "https://api.github.com/repos/dixonSolutions/SuperTuxKart-Touch/releases/latest";
+        "https://api.github.com/repos/" + REPO + "/releases/latest";
 
     private static final String PREFS = "stk_updates";
     private static final String PREF_ENABLED = "check_on_launch";
@@ -131,12 +134,15 @@ public class STKUpdateChecker
                 {
                     JSONObject asset = assets.getJSONObject(i);
                     String name = asset.optString("name", "");
-                    if (name.endsWith(".apk") && name.contains(abi))
+                    String url = asset.optString("browser_download_url", "");
+                    if (!name.endsWith(".apk") || !name.contains(abi))
+                        continue;
+                    if (!isTrustedApkUrl(url))
                     {
-                        return new Update(version,
-                            asset.getString("browser_download_url"),
-                            asset.optLong("size", -1));
+                        Log.w(TAG, "Ignoring release asset with an untrusted URL: " + url);
+                        continue;
                     }
+                    return new Update(version, url, asset.optLong("size", -1));
                 }
             }
             Log.i(TAG, "Release " + version + " has no build for " +
@@ -210,8 +216,30 @@ public class STKUpdateChecker
             startInstall(m_pending_update);
     }
 
+    /**
+     * True only for an `.apk` release asset served by GitHub for this repo.
+     *
+     * The URL arrives inside a TLS response from api.github.com, so this is
+     * defence in depth rather than the only thing standing in the way — but what
+     * it guards is a package install, and the guard costs one string comparison.
+     */
+    static boolean isTrustedApkUrl(String url)
+    {
+        return url != null
+            && url.startsWith("https://github.com/")
+            && url.contains(REPO)
+            && url.endsWith(".apk")
+            && !url.contains("..");
+    }
+
     private void install(Update update) throws IOException
     {
+        // Checked again at the point of use, not only where the URL was picked:
+        // these bytes go straight into a PackageInstaller session, so this is the
+        // difference between updating this app and installing an arbitrary APK.
+        if (!isTrustedApkUrl(update.url))
+            throw new IOException("refusing to install an untrusted APK URL");
+
         PackageInstaller installer =
             m_activity.getPackageManager().getPackageInstaller();
         PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
@@ -221,6 +249,7 @@ public class STKUpdateChecker
 
         int session_id = installer.createSession(params);
         PackageInstaller.Session session = installer.openSession(session_id);
+        boolean committed = false;
         try
         {
             HttpURLConnection connection =
@@ -257,10 +286,26 @@ public class STKUpdateChecker
                 connection.disconnect();
             }
             session.commit(installStatusIntent().getIntentSender());
+            committed = true;
         }
         finally
         {
             session.close();
+            // close() only drops our handle. A session that never committed keeps
+            // its staged bytes -- a whole partial APK -- until the system reaps
+            // it, so a failed download would otherwise cost the player storage
+            // every time it was retried.
+            if (!committed)
+            {
+                try
+                {
+                    installer.abandonSession(session_id);
+                }
+                catch (RuntimeException e)
+                {
+                    Log.w(TAG, "Could not abandon install session", e);
+                }
+            }
         }
     }
 
