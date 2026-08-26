@@ -105,8 +105,13 @@ self-update model, and this is the part of it worth stating out loud: the only
 thing that ever reaches the package installer is an `.apk` release asset served
 by `github.com` for this repository's own path.
 
-`isTrustedApkUrl` enforces that — https, `github.com`, this repo, an `.apk`
-suffix, no `..` — and it is checked twice: once when picking the asset out of
+`isTrustedApkUrl` enforces that by anchoring the URL to a single prefix,
+`https://github.com/` + this repo + `/`, plus an `.apk` suffix and no `..`. The
+prefix has to be the whole path root, not merely a substring somewhere in the
+URL: a substring is not a path boundary, so asking only whether the URL
+*contained* the repo name accepted an owner whose name ends with ours, a repo
+whose name starts with ours, and any unrelated repo burying the string further
+down its path. It is checked twice: once when picking the asset out of
 the release feed, and again in `install()` immediately before the bytes are
 streamed into the `PackageInstaller` session. The second check is not
 redundant. It is the one guarding the actual install, and it does not depend on

@@ -52,6 +52,10 @@ public class STKUpdateChecker
     private static final String RELEASES_URL =
         "https://api.github.com/repos/" + REPO + "/releases/latest";
 
+    /** Every download URL this repo's release assets can have starts with this. */
+    private static final String DOWNLOAD_PREFIX =
+        "https://github.com/" + REPO + "/";
+
     private static final String PREFS = "stk_updates";
     private static final String PREF_ENABLED = "check_on_launch";
     private static final String PREF_SKIPPED_TAG = "skipped_tag";
@@ -219,6 +223,14 @@ public class STKUpdateChecker
     /**
      * True only for an `.apk` release asset served by GitHub for this repo.
      *
+     * Anchored to a single prefix rather than asking whether the URL merely
+     * *contains* the repo name. A substring is not a path boundary, so the
+     * previous revision accepted exactly what it was written to stop: an owner
+     * whose name ends with ours (evil-dixonSolutions/SuperTuxKart-Touch), a repo
+     * whose name starts with ours (SuperTuxKart-Touch-fork), and any unrelated
+     * repo burying the string further down its path. All three still start with
+     * https://github.com/ and end in .apk, so both call sites took them.
+     *
      * The URL arrives inside a TLS response from api.github.com, so this is
      * defence in depth rather than the only thing standing in the way — but what
      * it guards is a package install, and the guard costs one string comparison.
@@ -226,8 +238,7 @@ public class STKUpdateChecker
     static boolean isTrustedApkUrl(String url)
     {
         return url != null
-            && url.startsWith("https://github.com/")
-            && url.contains(REPO)
+            && url.startsWith(DOWNLOAD_PREFIX)
             && url.endsWith(".apk")
             && !url.contains("..");
     }
