@@ -174,6 +174,11 @@ public class STKUpdateChecker
         {
             skipVersion(m_activity, m_last_seen == null ? null : m_last_seen.version);
             m_last_seen = null;
+            // Skip stays pressable while we wait for the install permission --
+            // that state is not busy -- and onResume() installs whatever is
+            // left here as soon as the permission arrives. Forgetting it is
+            // what makes the skip stick.
+            m_pending_update = null;
             m_bridge.publishUpToDate(installed);
         }
         else if (request.equals("check"))
