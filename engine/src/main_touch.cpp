@@ -1,5 +1,5 @@
 //
-//  SuperTuxKart Touch - Linux tablet / phone defaults
+//  SuperTuxKart Touch - touch-first defaults (Linux tablet, Android APK)
 //  Copyright (C) 2026 SuperTuxKart-Touch contributors
 //
 //  This program is free software; you can redistribute it and/or
@@ -7,7 +7,7 @@
 //  as published by the Free Software Foundation; either version 3
 //  of the License, or (at your option) any later version.
 
-#ifdef TOUCH_STK
+#ifdef TOUCH_STK_HUD
 
 #include "config/user_config.hpp"
 #include "utils/log.hpp"
@@ -15,8 +15,13 @@
 #include <cstdlib>
 #include <cstring>
 
+#ifdef ANDROID
+#include "SDL_system.h"
+#endif
+
 namespace
 {
+#ifdef TOUCH_STK
 /** thermal (default) | balanced | quality — from STK_TOUCH_PERF or env. */
 const char *touchPerfProfile()
 {
@@ -25,11 +30,33 @@ const char *touchPerfProfile()
         return env;
     return "thermal";
 }
+#endif
+
+/** True when the device running this build really has a touch screen.
+ *
+ *  Android TV reports one it does not have, which is why main_android.cpp turns
+ *  the race HUD off there. Forcing the stick back on would leave an unusable
+ *  control on a set-top box, so the touch defaults are skipped for it.
+ */
+bool hasTouchScreen()
+{
+#ifdef ANDROID
+    return !SDL_IsAndroidTV();
+#else
+    return true;
+#endif
+}
 } // namespace
 
 /** Apply touch-first defaults after config load. */
 void override_default_params_for_touch()
 {
+    if (!hasTouchScreen())
+    {
+        Log::info("MainTouch", "No touch screen; leaving control defaults alone.");
+        return;
+    }
+
     UserConfigParams::m_multitouch_active.setDefaultValue(2);
     UserConfigParams::m_multitouch_draw_gui.setDefaultValue(true);
     UserConfigParams::m_multitouch_controls.setDefaultValue(
@@ -44,6 +71,7 @@ void override_default_params_for_touch()
     if (UserConfigParams::m_multitouch_controls == MULTITOUCH_CONTROLS_UNDEFINED)
         UserConfigParams::m_multitouch_controls = MULTITOUCH_CONTROLS_STEERING_WHEEL;
 
+#ifdef TOUCH_STK
     const char *perf = touchPerfProfile();
     // Always apply thermal/balanced/quality on touch builds (tablet product).
     if (std::strcmp(perf, "quality") == 0)
@@ -102,6 +130,12 @@ void override_default_params_for_touch()
     Log::info("MainTouch",
               "Touch defaults applied (multitouch GUI + screen keyboard, perf=%s).",
               perf);
+#else
+    // The APK keeps override_default_params_for_mobile()'s graphics tuning, which
+    // already scales per Android SDK version. Only the controls come from here.
+    Log::info("MainTouch",
+              "Touch control defaults applied (multitouch GUI + screen keyboard).");
+#endif
 }
 
-#endif // TOUCH_STK
+#endif // TOUCH_STK_HUD

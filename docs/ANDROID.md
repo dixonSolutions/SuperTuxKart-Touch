@@ -4,6 +4,15 @@ SuperTuxKart Touch ships a native Android APK alongside the Flatpak and Ubuntu
 Touch `.click`. It is the engine's own Android build (`engine/android/`,
 ndk-build + gradle), re-branded and driven from CI.
 
+The APK does **not** define `TOUCH_STK` — that flag carries the Linux-tablet
+specifics (asset-download wizard, Flatpak / Click data paths, the thermal perf
+profiles), and `engine/CMakeLists.txt` excludes Android from it. The glass touch
+HUD is a separate flag, `TOUCH_STK_HUD`, set here in `Android.mk` and by CMake on
+the Linux builds, so the on-screen stick and the touch control defaults are the
+same product on every touch target. Android keeps its own graphics tuning from
+`override_default_params_for_mobile()`; only the controls come from
+`main_touch.cpp`. Android TV is detected and left alone.
+
 | | |
 |---|---|
 | Package id | `io.github.dixonsolutions.supertuxkarttouch` |

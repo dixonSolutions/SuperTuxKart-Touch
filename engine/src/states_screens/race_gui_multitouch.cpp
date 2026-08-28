@@ -82,7 +82,7 @@ RaceGUIMultitouch::RaceGUIMultitouch(RaceGUIBase* race_gui)
     m_stick_radius = 0;
     m_stick_home_x = 0;
     m_stick_home_y = 0;
-#ifdef TOUCH_STK
+#ifdef TOUCH_STK_HUD
     m_use_glass_ui = true;
 #else
     m_use_glass_ui = false;
@@ -481,8 +481,14 @@ void RaceGUIMultitouch::drawSteering(const MultitouchButton* button,
     // point, so the two never drift apart.
     int base_x = button->pressed ? button->origin_x : m_stick_home_x;
     int base_y = button->pressed ? button->origin_y : m_stick_home_y;
-    const int radius = glass ? m_stick_radius
-                             : std::min(button->width, button->height) / 2;
+    // m_stick_radius is the size of the stick graphic; the button is the whole
+    // invisible lower-corner hit region, which is far larger. Sizing off the
+    // button would draw a wheel two thirds of the screen high, so it is only the
+    // last resort for a layout that never set a radius (upstream's small fixed
+    // steering button).
+    const int radius = m_stick_radius > 0
+                     ? m_stick_radius
+                     : std::min(button->width, button->height) / 2;
     base_x = core::clamp(base_x, button->x + radius,
                          button->x + button->width - radius);
     base_y = core::clamp(base_y, button->y + radius,
