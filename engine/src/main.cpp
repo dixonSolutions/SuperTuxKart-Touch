@@ -1906,7 +1906,7 @@ int handleCmdLine(bool has_server_config, bool has_parent_process)
 //=============================================================================
 /** Initialises the minimum number of managers to get access to user_config.
  */
-#ifdef TOUCH_STK
+#ifdef TOUCH_STK_HUD
 void override_default_params_for_touch();
 #endif
 
@@ -1915,8 +1915,9 @@ void initUserConfig()
     file_manager = new FileManager();
     user_config  = new UserConfig();     // needs file_manager
     user_config->loadConfig();
-#ifdef TOUCH_STK
-    // Re-assert tablet-first multitouch + on-screen keyboard after load.
+#ifdef TOUCH_STK_HUD
+    // Re-assert touch-first multitouch + on-screen keyboard after load, on every
+    // touch target including the Android APK.
     override_default_params_for_touch();
 #endif
     // Some parts of the file manager needs user config (paths for models

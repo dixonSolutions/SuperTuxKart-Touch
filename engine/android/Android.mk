@@ -377,6 +377,7 @@ LOCAL_CFLAGS       := -I../lib/angelscript/include      \
                       -Ideps-$(TARGET_ARCH_ABI)/mbedtls/include   \
                       -DUSE_GLES2      \
                       -DMOBILE_STK     \
+                      -DTOUCH_STK_HUD  \
                       -DENABLE_SOUND   \
                       -DENABLE_IPV6    \
                       -DENABLE_CRYPTO_MBEDTLS \

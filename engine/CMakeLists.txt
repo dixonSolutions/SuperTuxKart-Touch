@@ -93,6 +93,16 @@ if(TOUCH_STK AND NOT ANDROID AND NOT IOS)
     endif()
 endif()
 
+# TOUCH_STK carries the Linux-tablet specifics: asset-download wizard, Flatpak /
+# Click data paths, thermal perf profiles. None of that applies to the Android
+# APK, which is why it is excluded above -- but the glass HUD is the product on
+# every touch target, so it gets its own flag that Android can set too. The APK
+# builds through engine/android/Android.mk (ndk-build), which defines it there.
+if(TOUCH_STK AND NOT IOS)
+    ADD_DEFINITIONS(-DTOUCH_STK_HUD)
+    message(STATUS "SuperTuxKart Touch glass HUD enabled (TOUCH_STK_HUD)")
+endif()
+
 if (IOS)
     ADD_DEFINITIONS(-DMOBILE_STK)
     ADD_DEFINITIONS(-DIOS_STK)
