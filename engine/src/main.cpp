@@ -296,6 +296,7 @@ extern "C" {
 #include "utils/stk_process.hpp"
 #include "utils/string_utils.hpp"
 #include "utils/translation.hpp"
+#include "utils/ubuntu_touch_screen.hpp"
 #include "io/rich_presence.hpp"
 
 #include <IrrlichtDevice.h>
@@ -1910,6 +1911,24 @@ int handleCmdLine(bool has_server_config, bool has_parent_process)
 void override_default_params_for_touch();
 #endif
 
+//=============================================================================
+/** Logs one startup milestone.
+ *
+ *  Between the file manager banner and the main menu the engine says nothing,
+ *  and every Ubuntu Touch launch report so far (#1-#5) arrived as journal
+ *  output covering exactly that silence. The "supertuxkart-touch" tag is the
+ *  one packaging/start.sh already prints with, so these milestones survive the
+ *  greps in docs/UBUNTU_TOUCH_LAUNCH.md and say how far a stuck launch got.
+ */
+static void logStartupPhase(const char* phase)
+{
+#ifdef TOUCH_STK_HUD
+    Log::info("supertuxkart-touch", "startup: %s", phase);
+#else
+    (void)phase;
+#endif
+}   // logStartupPhase
+
 void initUserConfig()
 {
     file_manager = new FileManager();
@@ -2392,6 +2411,10 @@ int main(int argc, char *argv[])
         // be reset later after story mode status and player manager is loaded
         story_mode_timer = new StoryModeTimer();
         initRest();
+        logStartupPhase("graphics, GUI and asset managers ready");
+
+        // The window exists now, so the display can be pinned awake.
+        UbuntuTouchScreen::keepDisplayOn();
 
 #ifdef ENABLE_WIIUSE
         wiimote_manager = new WiimoteManager();
@@ -2410,7 +2433,9 @@ int main(int argc, char *argv[])
 
         // Set of loading steps common between the first game launch and
         // reloading to apply a new resolution.
+        logStartupPhase("loading materials, models and karts");
         irr_driver->commonInit();
+        logStartupPhase("materials, models and karts loaded");
 
         OfficialKarts::load();
         handleXmasMode();
@@ -2426,6 +2451,7 @@ int main(int argc, char *argv[])
         // initialise the game slots of all players and the AchievementsManager
         // to initialise the AchievementsStatus, so it is done only now.
         PlayerManager::get()->initRemainingData();
+        logStartupPhase("player data and challenges ready");
 
         GUIEngine::addLoadingIcon( irr_driver->getTexture(FileManager::GUI_ICON,
                                                           "gui_lock.png"  ) );
@@ -2615,10 +2641,12 @@ int main(int argc, char *argv[])
             if(PlayerManager::getCurrentPlayer() && !
                 UserConfigParams::m_always_show_login_screen)
             {
+                logStartupPhase("showing the main menu");
                 MainMenuScreen::getInstance()->push();
             }
             else
             {
+                logStartupPhase("showing the login screen");
                 UserScreen::getInstance()->push();
                 // If there is no player, push the RegisterScreen on top of
                 // the login screen. This way on first start players are
@@ -2702,6 +2730,7 @@ int main(int argc, char *argv[])
         appletSetCpuBoostMode(ApmCpuBoostMode_Normal);
 #endif
 
+        logStartupPhase("entering the main loop");
         main_loop->run();
 
     }  // try
@@ -2813,6 +2842,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
  */
 static void cleanSuperTuxKart()
 {
+    UbuntuTouchScreen::releaseDisplay();
 
     delete main_loop;
 
