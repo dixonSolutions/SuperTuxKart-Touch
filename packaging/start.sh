@@ -169,6 +169,13 @@ if [ "$CLICK_PACKAGE" -eq 1 ]; then
     export STK_TOUCH_ASSETS_DIR="${XDG_DATA_HOME}/stk-assets"
     # FileManager short-circuits to this for config-0.10/ (no /supertuxkart append).
     export SUPERTUXKART_SAVEDIR="${XDG_CONFIG_HOME}/supertuxkart"
+    # Tells the engine it is confined under Lomiri, so it keeps the display
+    # awake through com.canonical.Unity.Screen instead of the freedesktop
+    # screensaver interface AppArmor denies (issue #5).
+    export STK_TOUCH_CLICK=1
+    # …and stops SDL retrying that denied org.freedesktop.ScreenSaver Inhibit,
+    # which only ever filled the journal with apparmor="DENIED" noise.
+    export SDL_VIDEO_ALLOW_SCREENSAVER=1
     stk_log "Click XDG_CONFIG_HOME=$XDG_CONFIG_HOME"
     stk_log "Click STK_TOUCH_ASSETS_DIR=$STK_TOUCH_ASSETS_DIR"
 else
