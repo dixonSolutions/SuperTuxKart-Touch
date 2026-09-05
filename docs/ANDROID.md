@@ -107,6 +107,46 @@ by tag shape (`vX.Y.Z`) and asset filename (must contain the ABI), and both are
 conventions rather than contracts: renaming the APKs would strand every install
 on its current build with no error anywhere.
 
+### The in-game Updates screen
+
+`STKUpdateChecker` can only ask its question once, at launch, in a dialog that
+is gone before anyone is racing. Everything a player wants afterwards — which
+build am I on, how far behind, check again, stop asking — lives in
+**Options → Updates** instead.
+
+Options is C++ and the updater is Java, so rather than reach across that with
+JNI the two halves pass line-based files through the app's files directory.
+`STKUpdateBridge` owns `update-status.txt` and only writes it; the C++ side owns
+`update-request.txt` and only writes that. Neither reads its own file back, so
+there is no shared state to race over — a torn read costs one stale second and
+the screen re-reads on a timer.
+
+That directory is `getFilesDir()` rather than STK's config directory on purpose.
+The config path is assembled in `assets_android.cpp` from `HOME` plus
+`.config/supertuxkart`, and duplicating that derivation in Java would be a
+second copy to get wrong; both sides name this one by construction, C++ through
+SDL's internal storage path.
+
+The format is documented once, in `src/utils/touch_update_status.hpp`. Requests
+are `check`, `install`, `skip`, `auto-on` and `auto-off`, served by a poll
+thread `SuperTuxKartActivity` starts for the life of the process — without one,
+every button on that screen would write a file nothing ever reads.
+
+Every other platform has no half to serve those requests, so `TouchUpdate::read`
+answers `managed` there. The tab still names the build you are on and says to
+update it the way you installed it, rather than offering buttons nothing is
+behind.
+
+Auto-update is opt-out, so a player who never opens Options still gets fixes.
+Turning it off does not stop the check — the screen still has to say how far
+behind you are — it stops the install happening without being asked for. Android
+confirms every package install either way, so even "automatic" is one tap rather
+than none.
+
+Xonotic Touch runs the identical contract between its Java updater and its
+QuakeC menu. The two projects' file formats are the same by intent; keep them in
+step.
+
 ### What the updater will and will not install
 
 The three Touch projects (this one, Xonotic Touch and Potato Tomato) share one
@@ -114,8 +154,13 @@ self-update model, and this is the part of it worth stating out loud: the only
 thing that ever reaches the package installer is an `.apk` release asset served
 by `github.com` for this repository's own path.
 
-`isTrustedApkUrl` enforces that — https, `github.com`, this repo, an `.apk`
-suffix, no `..` — and it is checked twice: once when picking the asset out of
+`isTrustedApkUrl` enforces that by anchoring the URL to a single prefix,
+`https://github.com/` + this repo + `/`, plus an `.apk` suffix and no `..`. The
+prefix has to be the whole path root, not merely a substring somewhere in the
+URL: a substring is not a path boundary, so asking only whether the URL
+*contained* the repo name accepted an owner whose name ends with ours, a repo
+whose name starts with ours, and any unrelated repo burying the string further
+down its path. It is checked twice: once when picking the asset out of
 the release feed, and again in `install()` immediately before the bytes are
 streamed into the `PackageInstaller` session. The second check is not
 redundant. It is the one guarding the actual install, and it does not depend on

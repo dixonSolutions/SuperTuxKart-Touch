@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<stkgui>
+    <icon-button id="back" x="1%" y="0" height="9%" icon="gui/icons/back.png"/>
+    <div x="1%" y="1%" width="98%" height="98%" layout="vertical-row" >
+        <header width="80%" height="8%" align="center" text="SuperTuxKart Options" text_align="center"/>
+        <spacer width="100%" height="1%"/>
+
+        <div width="100%" height="91%" layout="horizontal-row" >
+
+            <vertical-tabs id="options_choice" height="100%" width="20%">
+                <icon-button id="tab_general" width="128" height="128" icon="gui/icons/options_general.png"
+                        I18N="Section in the settings menu" text="General"/>
+                <icon-button id="tab_display" width="128" height="128" icon="gui/icons/options_display.png"
+                        I18N="Section in the settings menu" text="Display"/>
+                <icon-button id="tab_video" width="128" height="128" icon="gui/icons/options_video.png"
+                        I18N="Section in the settings menu" text="Graphics"/>
+                <icon-button id="tab_audio" width="128" height="128" icon="gui/icons/options_audio.png"
+                        I18N="Section in the settings menu" text="Audio"/>
+                <icon-button id="tab_ui" width="128" height="128" icon="gui/icons/options_ui.png"
+                        I18N="Section in the settings menu" text="Interface"/>
+                <icon-button id="tab_players" width="128" height="128" icon="gui/icons/options_players.png"
+                        I18N="Section in the settings menu" text="Players"/>
+                <icon-button id="tab_controls" width="128" height="128" icon="gui/icons/options_input.png"
+                        I18N="Section in the settings menu" text="Controls"/>
+                <icon-button id="tab_language" width="128" height="128" icon="gui/icons/options_language.png"
+                        I18N="Section in the settings menu" text="Language"/>
+                <icon-button id="tab_updates" width="128" height="128" icon="gui/icons/options_general.png"
+                        I18N="Section in the settings menu" text="Updates"/>
+            </vertical-tabs>
+
+            <spacer width="2%" height="100%"/>
+
+            <div width="100%" height="100%" layout="vertical-row" >
+                <box width="78%" height="92%" layout="vertical-row">
+
+                    <spacer width="5" height="2%"/>
+
+                    <label width="90%" height="fit" align="center" I18N="In the update settings" text="This build" text_align="center"/>
+
+                    <spacer width="5" height="2%"/>
+
+                    <!-- Filled from update-status.txt; the placeholder only shows
+                         for the instant before the first read lands. -->
+                    <label id="installed_version" width="90%" height="fit" align="center" text="" text_align="center"/>
+
+                    <spacer width="5" height="1%"/>
+
+                    <label id="update_state" width="90%" height="fit" align="center" text="" text_align="center"/>
+
+                    <spacer width="5" height="1%"/>
+
+                    <progressbar id="update_progress" width="90%" height="4%" align="center"/>
+
+                    <spacer width="5" height="1%"/>
+
+                    <label id="update_message" width="90%" height="fit" align="center" text="" text_align="center" word_wrap="true"/>
+
+                    <spacer width="5" height="3%"/>
+
+                    <label width="90%" height="fit" align="center" I18N="In the update settings" text="Updating" text_align="center"/>
+
+                    <spacer width="5" height="2%"/>
+
+                    <div layout="horizontal-row" width="90%" height="fit" align="center">
+                        <checkbox id="auto-update"/>
+                        <spacer width="1%" height="100%" />
+                        <label height="100%" I18N="In the update settings" text="Update automatically" word_wrap="true"/>
+                    </div>
+
+                    <spacer width="5" height="3%"/>
+
+                    <buttonbar id="update_actions" width="90%" height="18%" align="center">
+                        <icon-button id="check_now" width="128" height="128" icon="gui/icons/restart.png"
+                                I18N="Button in the update settings" text="Check now"/>
+                        <icon-button id="install_update" width="128" height="128" icon="gui/icons/menu_karts.png"
+                                I18N="Button in the update settings" text="Install update"/>
+                        <icon-button id="skip_version" width="128" height="128" icon="gui/icons/remove.png"
+                                I18N="Button in the update settings" text="Skip this version"/>
+                    </buttonbar>
+
+                </box>
+            </div>
+        </div>
+    </div>
+</stkgui>
