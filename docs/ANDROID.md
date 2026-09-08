@@ -134,6 +134,12 @@ behind you are — it stops the install happening without being asked for. Andro
 confirms every package install either way, so even "automatic" is one tap rather
 than none.
 
+The automatic path only runs on an unmetered network. On mobile data (or when
+the system cannot say), the launch check falls back to the dialog, which names
+the download size — that is the one question a metered download deserves, and
+the automatic path exists to skip a dialog, not to skip that. Explicit installs
+from the Updates screen are the player's call and are not gated.
+
 Xonotic Touch runs the identical contract between its Java updater and its
 QuakeC menu. The two projects' file formats are the same by intent; keep them in
 step.

@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInstaller;
+import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -73,6 +74,11 @@ public class STKUpdateChecker
     private final STKUpdateBridge m_bridge;
     /** Last release the check found, so Install and Skip know what they mean. */
     private volatile Update m_last_seen;
+    /** Set while a download or install is in flight. The launch check and the
+     *  request service run on their own threads, and a request file left over
+     *  from a previous run is served within a second of startup -- without
+     *  this the two would open two sessions and stream the same APK twice. */
+    private final AtomicBoolean m_install_in_flight = new AtomicBoolean();
     private Thread m_service;
 
     public STKUpdateChecker(Activity activity)
@@ -252,6 +258,11 @@ public class STKUpdateChecker
 
     private void installFromMenu(String installed)
     {
+        if (m_install_in_flight.get())
+        {
+            Log.i(TAG, "Ignoring install request: one is already in flight");
+            return;
+        }
         CheckResult target = targetUpdate(installed);
         Update update = target.m_update;
         if (update == null)
@@ -277,6 +288,15 @@ public class STKUpdateChecker
     /** Install, and say so the whole way through, from either entry point. */
     private void runInstall(final Update update, final String installed)
     {
+        // Claimed here rather than in the callers: this is the one place every
+        // path -- launch check, Updates screen, the dialog, onResume() -- goes
+        // through, and a second session for the same release is never useful.
+        // Cleared on failure below; on success the upgrade replaces the process.
+        if (!m_install_in_flight.compareAndSet(false, true))
+        {
+            Log.i(TAG, "Install of " + update.version + " already in flight");
+            return;
+        }
         // The failure callback below is a broadcast receiver, so it can land
         // before install() has returned -- at once, if launching the confirm
         // dialog throws. Publishing `installing` over it would put back the
@@ -300,6 +320,7 @@ public class STKUpdateChecker
                     // dialog, which is a thing players do on purpose, would
                     // take away the button that starts it again.
                     failed.set(true);
+                    m_install_in_flight.set(false);
                     m_bridge.publishInstallFailed(installed, update.version,
                         "Update failed. Try again later.");
                 }
@@ -312,6 +333,7 @@ public class STKUpdateChecker
             // Same reasoning as the callback above: a download that broke off
             // is a reason to offer the retry, not to take it away.
             Log.w(TAG, "Update install failed", e);
+            m_install_in_flight.set(false);
             m_bridge.publishInstallFailed(installed, update.version,
                 String.valueOf(e.getMessage()));
         }
@@ -345,7 +367,7 @@ public class STKUpdateChecker
                 publishFindings(installed, result);
                 if (update == null)
                     return;
-                if (isAutoInstall(m_activity))
+                if (isAutoInstall(m_activity) && !isMeteredNetwork())
                 {
                     // Taking the automatic path means not stopping to ask. The
                     // system installer still confirms, so this is not an
@@ -353,6 +375,9 @@ public class STKUpdateChecker
                     installFromMenu(installed);
                     return;
                 }
+                // Either the player asked to be asked, or this is mobile data:
+                // a download of this size that nobody requested is not a fix,
+                // so the dialog -- which names the size -- gets the say.
                 m_activity.runOnUiThread(new Runnable()
                 {
                     @Override
@@ -360,6 +385,27 @@ public class STKUpdateChecker
                 });
             }
         }, "stk-update-check").start();
+    }
+
+    /**
+     * True on a connection the system says costs the player per byte: mobile
+     * data, a metered hotspot. The automatic path exists to skip the dialog,
+     * and it must not also skip the one question a metered download deserves.
+     * Unknown counts as metered -- the safe mistake here is one extra dialog.
+     */
+    private boolean isMeteredNetwork()
+    {
+        try
+        {
+            ConnectivityManager cm = (ConnectivityManager)
+                m_activity.getSystemService(Context.CONNECTIVITY_SERVICE);
+            return cm == null || cm.isActiveNetworkMetered();
+        }
+        catch (RuntimeException e)
+        {
+            Log.w(TAG, "Could not tell whether the network is metered", e);
+            return true;
+        }
     }
 
     /**
@@ -477,10 +523,18 @@ public class STKUpdateChecker
     {
         if (m_activity.isFinishing())
             return;
+        String message = "You have " + installedVersion() +
+            ". Updating keeps your progress, karts and settings.";
+        // The feed reports the asset size, and on mobile data that number is
+        // the whole question this dialog is asking.
+        if (update.size > 0)
+        {
+            message += "\n\nDownload: about " +
+                Math.max(1, Math.round(update.size / (1024.0 * 1024.0))) + " MB.";
+        }
         new AlertDialog.Builder(m_activity)
             .setTitle("SuperTuxKart Touch " + update.version)
-            .setMessage("You have " + installedVersion() +
-                ". Updating keeps your progress, karts and settings.")
+            .setMessage(message)
             .setPositiveButton("Update", new DialogInterface.OnClickListener()
             {
                 @Override
