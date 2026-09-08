@@ -42,6 +42,8 @@ namespace OptionsCommon
             screen = OptionsScreenGeneral::getInstance();
         else if (selected_tab == "tab_language")
             screen = OptionsScreenLanguage::getInstance();
+        else if (selected_tab == "tab_updates")
+            screen = OptionsScreenUpdates::getInstance();
         if(screen)
             StateManager::get()->replaceTopMostScreen(screen);
     }
@@ -59,12 +61,20 @@ namespace OptionsCommon
     {
         GUIEngine::Widget* players  = GUIEngine::getWidget("tab_players");
         GUIEngine::Widget* language = GUIEngine::getWidget("tab_language");
+        GUIEngine::Widget* updates  = GUIEngine::getWidget("tab_updates");
         bool is_pause = StateManager::get()->getGameState() == GUIEngine::INGAME_MENU;
 
         players->setActive(!is_pause);
         language->setActive(!is_pause);
         updatePauseTooltip(players, is_pause);
         updatePauseTooltip(language, is_pause);
+        // Installing an update replaces the running process, so from the
+        // pause menu this tab is as off-limits as the two above.
+        if (updates != NULL)
+        {
+            updates->setActive(!is_pause);
+            updatePauseTooltip(updates, is_pause);
+        }
     } // setTabStatus
 }
 

@@ -196,6 +196,11 @@ public class SuperTuxKartActivity extends SDLActivity
         // release. Runs on its own thread and never blocks the game.
         m_update_checker = new STKUpdateChecker(this);
         m_update_checker.checkInBackground();
+        // The launch check has finished long before anyone can reach
+        // Options → Updates, so something has to serve that screen's buttons
+        // for the life of the process -- otherwise each one writes a request
+        // file nothing ever reads.
+        m_update_checker.startRequestService();
         m_keyboard_height = new AtomicInteger();
         m_moved_height = new AtomicInteger();
         m_progress_dialog = null;
@@ -283,6 +288,14 @@ public class SuperTuxKartActivity extends SDLActivity
         super.onStart();
         m_keyboard_height.set(0);
         m_moved_height.set(0);
+    }
+    // ------------------------------------------------------------------------
+    @Override
+    public void onDestroy()
+    {
+        if (m_update_checker != null)
+            m_update_checker.stopRequestService();
+        super.onDestroy();
     }
     // ------------------------------------------------------------------------
     @Override
