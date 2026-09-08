@@ -18,7 +18,9 @@ Xonotic-Touch is DarkPlaces + QuakeC. SuperTuxKart is Irrlicht/C++ with an upstr
 1. **`TOUCH_STK` + `TOUCH_STK_MOBILE_ASSETS`** — tablet defaults and in-engine
    DownloadAssets wizard when tracks are missing (Flatpak and Click). Flathub
    SuperTuxKart is an optional reuse path in `start.sh`, not a hard requirement.
-2. **`main_touch.cpp`** — force multitouch GUI + screen keyboard after config load.
+2. **`main_touch.cpp`** — tablet defaults after config load (Auto + touch-only
+   filter, on-screen keyboard). Override with `STK_TOUCH_MODE=always|auto|off`.
+   See [TOUCH_DETECTION.md](TOUCH_DETECTION.md).
 3. **Glass race HUD** — virtual stick (steer + accel/brake) and tinted glass plates for item/drift/nitro/look.
 4. **Glass textures** — `data/gui/icons/android/glass_*.png`.
 5. **First-run control picker** — `InitAndroidDialog` also for `TOUCH_STK`.

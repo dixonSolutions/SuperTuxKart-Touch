@@ -141,6 +141,8 @@ public:
     MultitouchDevice*   getMultitouchDevice()    { return m_multitouch_device; }
     void                clearMultitouchDevices();
     void                updateMultitouchDevice();
+    /** Create or destroy the multitouch device to match current config + hardware. */
+    void                updateMultitouchAvailability();
 
 
     /**

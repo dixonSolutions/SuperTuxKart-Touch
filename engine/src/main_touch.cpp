@@ -57,7 +57,8 @@ void override_default_params_for_touch()
         return;
     }
 
-    UserConfigParams::m_multitouch_active.setDefaultValue(2);
+    UserConfigParams::m_multitouch_active.setDefaultValue(1);
+    UserConfigParams::m_multitouch_touch_only.setDefaultValue(true);
     UserConfigParams::m_multitouch_draw_gui.setDefaultValue(true);
     UserConfigParams::m_multitouch_controls.setDefaultValue(
         MULTITOUCH_CONTROLS_STEERING_WHEEL);
@@ -65,7 +66,17 @@ void override_default_params_for_touch()
     UserConfigParams::m_multitouch_scale.setDefaultValue(1.15f);
     UserConfigParams::m_screen_keyboard.setDefaultValue(1);
 
-    UserConfigParams::m_multitouch_active = 2;
+    const char *mode_env = std::getenv("STK_TOUCH_MODE");
+    if (mode_env && *mode_env)
+    {
+        if (std::strcmp(mode_env, "always") == 0 || std::strcmp(mode_env, "2") == 0)
+            UserConfigParams::m_multitouch_active = 2;
+        else if (std::strcmp(mode_env, "off") == 0 || std::strcmp(mode_env, "0") == 0)
+            UserConfigParams::m_multitouch_active = 0;
+        else
+            UserConfigParams::m_multitouch_active = 1;
+    }
+
     UserConfigParams::m_multitouch_draw_gui = true;
     UserConfigParams::m_screen_keyboard = 1;
     if (UserConfigParams::m_multitouch_controls == MULTITOUCH_CONTROLS_UNDEFINED)
@@ -128,7 +139,7 @@ void override_default_params_for_touch()
     }
 
     Log::info("MainTouch",
-              "Touch defaults applied (multitouch GUI + screen keyboard, perf=%s).",
+              "Touch defaults applied (auto-detect + screen keyboard, perf=%s).",
               perf);
 #else
     // The APK keeps override_default_params_for_mobile()'s graphics tuning, which
