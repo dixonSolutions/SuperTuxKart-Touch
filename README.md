@@ -2,6 +2,10 @@
 
 Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phones (**not** Flathub `net.supertuxkart.SuperTuxKart`). Glass virtual stick, drift / item / nitro buttons, touch settings, and an in-game screen keyboard. Defaults favour **thermal** headroom on fanless devices.
 
+![SuperTuxTouch mid-race on a Surface Pro 9: glass steering stick on the left, drift, nitro, item, look-back and rescue buttons on the right](docs/media/race-surface.jpg)
+
+*Cornfield Crossing on a Surface Pro 9 (Ultramarine Linux, Flatpak, 2880×1920). The on-screen controls appear only on touch-only hardware: plug a keyboard in and they go away, unplug it and they come back, live, with a toast.*
+
 | | |
 |---|---|
 | **Name** | SuperTuxTouch |

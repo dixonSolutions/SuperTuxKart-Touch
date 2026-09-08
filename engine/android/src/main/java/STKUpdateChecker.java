@@ -10,6 +10,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInstaller;
+import android.content.pm.PackageManager;
+import android.os.SystemClock;
 import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
@@ -65,7 +67,7 @@ public class STKUpdateChecker
     private static final String PREF_AUTO_INSTALL = "auto_install";
 
     private static final String INSTALL_ACTION =
-        "org.supertuxkart.stk_dbg.INSTALL_STATUS";
+        "io.github.dixonsolutions.supertuxkarttouch.INSTALL_STATUS";
 
     private final Activity m_activity;
     /** Set on whichever thread starts an install, read by onResume() on the UI
@@ -80,6 +82,17 @@ public class STKUpdateChecker
      *  this the two would open two sessions and stream the same APK twice. */
     private final AtomicBoolean m_install_in_flight = new AtomicBoolean();
     private Thread m_service;
+    /** When the last launch-style check started (elapsedRealtime), so a
+     *  resume long after it can look again. 0 = never. */
+    private volatile long m_last_check_ms;
+    /** A release the player answered "Not now" to: not offered again until
+     *  the next launch, however many times the app is resumed. */
+    private volatile String m_declined_version;
+
+    /** A game that sits in the background for hours comes back through
+     *  onResume(), not a fresh launch. Re-checking after this long keeps a
+     *  device that is never cold-started from missing every release. */
+    private static final long RECHECK_AFTER_MS = 60L * 60L * 1000L;
 
     public STKUpdateChecker(Activity activity)
     {
@@ -348,6 +361,7 @@ public class STKUpdateChecker
     {
         if (!prefs().getBoolean(PREF_ENABLED, true))
             return;
+        m_last_check_ms = SystemClock.elapsedRealtime();
 
         new Thread(new Runnable()
         {
@@ -366,6 +380,8 @@ public class STKUpdateChecker
                 // one that never completed is published as the failure it was.
                 publishFindings(installed, result);
                 if (update == null)
+                    return;
+                if (update.version.equals(m_declined_version))
                     return;
                 if (isAutoInstall(m_activity) && !isMeteredNetwork())
                 {
@@ -543,7 +559,16 @@ public class STKUpdateChecker
                     startInstall(update);
                 }
             })
-            .setNegativeButton("Not now", null)
+            .setNegativeButton("Not now", new DialogInterface.OnClickListener()
+            {
+                @Override
+                public void onClick(DialogInterface dialog, int which)
+                {
+                    // Asked again next launch -- but not on every resume
+                    // between now and then.
+                    m_declined_version = update.version;
+                }
+            })
             .setNeutralButton("Skip this version", new DialogInterface.OnClickListener()
             {
                 @Override
@@ -581,7 +606,16 @@ public class STKUpdateChecker
     void onResume()
     {
         if (m_pending_update != null && canInstallPackages())
+        {
             startInstall(m_pending_update);
+            return;
+        }
+        // Long enough in the background that a release may have shipped.
+        if (m_last_check_ms > 0 && !m_install_in_flight.get() &&
+            SystemClock.elapsedRealtime() - m_last_check_ms > RECHECK_AFTER_MS)
+        {
+            checkInBackground();
+        }
     }
 
     /**
@@ -635,6 +669,18 @@ public class STKUpdateChecker
             PackageInstaller.SessionParams.MODE_FULL_INSTALL);
         if (update.size > 0)
             params.setSize(update.size);
+
+        // Android 12+ lets the app that installed a package update it without
+        // the confirm dialog, once it is that package's installer of record.
+        // The first in-app update still asks (a sideload's installer is the
+        // file manager or browser); every one after it just happens.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        {
+            params.setRequireUserAction(
+                PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            params.setInstallReason(PackageManager.INSTALL_REASON_USER);
 
         int session_id = installer.createSession(params);
         PackageInstaller.Session session = installer.openSession(session_id);

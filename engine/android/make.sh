@@ -12,7 +12,11 @@ export SDK_PATH_DEFAULT="$DIRNAME/android-sdk"
 
 export NDK_BUILD_SCRIPT="$DIRNAME/Android.mk"
 
-#export NDK_CCACHE=ccache
+# ndk-build wraps every compiler call in $NDK_CCACHE when it is set. Only
+# opt in when ccache is actually installed, so a bare machine still builds.
+if [ -z "${NDK_CCACHE:-}" ] && command -v ccache >/dev/null 2>&1; then
+    export NDK_CCACHE=ccache
+fi
 export CPU_CORE="-j$(($(nproc) + 1))"
 
 if [ -z "$STK_MIN_ANDROID_SDK" ]; then

@@ -32,3 +32,6 @@ engine/android/.gradle/
 engine/android/.cxx/
 engine/android/android-sdk
 engine/android/android-ndk
+
+# fetched by engine/android/make_deps.sh
+engine/lib/mesa/

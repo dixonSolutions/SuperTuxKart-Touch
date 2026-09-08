@@ -15,6 +15,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.content.res.Configuration;
+import android.hardware.input.InputManager;
+import android.view.InputDevice;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -86,6 +88,94 @@ public class SuperTuxKartActivity extends SDLActivity
     private native static void addDNSSrvRecords(String name, int weight);
     // ------------------------------------------------------------------------
     private native static void pauseRenderingJNI();
+    // ------------------------------------------------------------------------
+    /** Tells the game whether a real keyboard is attached, so it can hide or
+     *  show the on-screen race controls without a restart. */
+    private native static void handleHardwareKeyboard(boolean present);
+    // ------------------------------------------------------------------------
+    private InputManager.InputDeviceListener m_input_device_listener;
+    private boolean m_hardware_keyboard_reported;
+    private boolean m_hardware_keyboard_known;
+    // ------------------------------------------------------------------------
+    /** A keyboard someone can type on: an alphabetic, non-virtual input
+     *  device, or the configuration saying a hard keyboard is unfolded. The
+     *  system's own virtual keyboard device is excluded, as are gamepads
+     *  that happen to expose a few key codes. */
+    private boolean hasHardwareKeyboard()
+    {
+        try
+        {
+            Configuration c = getResources().getConfiguration();
+            if (c.keyboard == Configuration.KEYBOARD_QWERTY &&
+                c.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO)
+                return true;
+            for (int id : InputDevice.getDeviceIds())
+            {
+                InputDevice d = InputDevice.getDevice(id);
+                if (d == null || d.isVirtual())
+                    continue;
+                if ((d.getSources() & InputDevice.SOURCE_KEYBOARD) !=
+                    InputDevice.SOURCE_KEYBOARD)
+                    continue;
+                if (d.getKeyboardType() != InputDevice.KEYBOARD_TYPE_ALPHABETIC)
+                    continue;
+                // Gamepads and remotes report SOURCE_KEYBOARD too; a real
+                // keyboard is one that is not primarily a game controller.
+                if ((d.getSources() & InputDevice.SOURCE_GAMEPAD) ==
+                    InputDevice.SOURCE_GAMEPAD)
+                    continue;
+                return true;
+            }
+        }
+        catch (RuntimeException e)
+        {
+            // Never let an input service hiccup take the game down.
+        }
+        return false;
+    }
+    // ------------------------------------------------------------------------
+    private void reportHardwareKeyboard()
+    {
+        boolean present = hasHardwareKeyboard();
+        if (m_hardware_keyboard_known && present == m_hardware_keyboard_reported)
+            return;
+        m_hardware_keyboard_known = true;
+        m_hardware_keyboard_reported = present;
+        // Natives are registered by the game thread shortly after start; a
+        // report before that has nowhere to go and is repeated on the next
+        // device change or resume.
+        if (SDLActivity.mSDLThread == null)
+        {
+            m_hardware_keyboard_known = false;
+            return;
+        }
+        try
+        {
+            handleHardwareKeyboard(present);
+        }
+        catch (UnsatisfiedLinkError e)
+        {
+            m_hardware_keyboard_known = false;
+        }
+    }
+    // ------------------------------------------------------------------------
+    private void watchInputDevices()
+    {
+        InputManager im = (InputManager)getSystemService(Context.INPUT_SERVICE);
+        if (im == null)
+            return;
+        m_input_device_listener = new InputManager.InputDeviceListener()
+        {
+            @Override
+            public void onInputDeviceAdded(int id) { reportHardwareKeyboard(); }
+            @Override
+            public void onInputDeviceRemoved(int id) { reportHardwareKeyboard(); }
+            @Override
+            public void onInputDeviceChanged(int id) { reportHardwareKeyboard(); }
+        };
+        im.registerInputDeviceListener(m_input_device_listener,
+                                       new Handler(getMainLooper()));
+    }
     // ------------------------------------------------------------------------
     private void showExtractProgressPrivate()
     {
@@ -201,6 +291,9 @@ public class SuperTuxKartActivity extends SDLActivity
         // for the life of the process -- otherwise each one writes a request
         // file nothing ever reads.
         m_update_checker.startRequestService();
+        // Keyboards come and go while the game runs (Bluetooth, USB-C,
+        // a tablet keyboard case); the race HUD follows them live.
+        watchInputDevices();
         m_keyboard_height = new AtomicInteger();
         m_moved_height = new AtomicInteger();
         m_progress_dialog = null;
@@ -295,6 +388,13 @@ public class SuperTuxKartActivity extends SDLActivity
     {
         if (m_update_checker != null)
             m_update_checker.stopRequestService();
+        if (m_input_device_listener != null)
+        {
+            InputManager im = (InputManager)getSystemService(Context.INPUT_SERVICE);
+            if (im != null)
+                im.unregisterInputDeviceListener(m_input_device_listener);
+            m_input_device_listener = null;
+        }
         super.onDestroy();
     }
     // ------------------------------------------------------------------------
@@ -303,6 +403,16 @@ public class SuperTuxKartActivity extends SDLActivity
     {
         super.onResume();
         m_update_checker.onResume();
+        reportHardwareKeyboard();
+    }
+    // ------------------------------------------------------------------------
+    /** A keyboard case folding open or shut arrives as a configuration
+     *  change rather than a device event. */
+    @Override
+    public void onConfigurationChanged(Configuration new_config)
+    {
+        super.onConfigurationChanged(new_config);
+        reportHardwareKeyboard();
     }
     // ------------------------------------------------------------------------
     @Override

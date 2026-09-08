@@ -44,6 +44,10 @@ jobs:
             abi: arm64-v8a
           - arch: armv7
             abi: armeabi-v7a
+          # Waydroid, Chromebooks and the Android emulator. Also what lets
+          # the self-updater be exercised on a desktop before a release.
+          - arch: x86_64
+            abi: x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -78,8 +82,22 @@ jobs:
             autoconf automake libtool make gcc g++ pkg-config \
             flex bison cmake meson ninja-build \
             imagemagick pngquant advancecomp optipng libjpeg-turbo-progs \
-            vorbis-tools unzip curl xz-utils python3 python3-pip
+            vorbis-tools unzip curl xz-utils python3 python3-pip ccache
           pip3 install --break-system-packages --quiet packaging mako
+
+      # ndk-build honours NDK_CCACHE; make.sh exports it when ccache is on
+      # PATH. The cache key is per commit with a prefix fallback, so every
+      # run restores the newest cache and saves its own -- an exact-hit key
+      # would never be re-saved and go stale.
+      - name: Cache ccache (native game code)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: stk-android-ccache-${{ matrix.abi }}-${{ env.STK_NDK_VERSION }}-${{ github.sha }}
+          restore-keys: |
+            stk-android-ccache-${{ matrix.abi }}-${{ env.STK_NDK_VERSION }}-
+
+      - uses: gradle/actions/setup-gradle@v4
 
       - name: Install Android NDK ${{ env.STK_NDK_VERSION }}
         run: |
@@ -119,6 +137,8 @@ jobs:
       - name: Build APK
         env:
           ANDROID_ARCHS: ${{ matrix.arch }}
+          CCACHE_DIR: ~/.cache/ccache
+          CCACHE_MAXSIZE: 1G
           PROJECT_VERSION: ${{ steps.ver.outputs.version }}
           PROJECT_CODE: ${{ steps.ver.outputs.code }}
           STK_STOREPASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -128,6 +148,7 @@ jobs:
       - name: Show APK metadata
         run: |
           set -euo pipefail
+          ccache -s 2>/dev/null | head -8 || true
           APK="$(find build/android-out -name '*.apk' | head -1)"
           ls -lh "$APK"
           AAPT="$(find "$ANDROID_SDK_ROOT/build-tools" -name aapt2 | sort -r | head -1)"

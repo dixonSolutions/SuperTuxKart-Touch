@@ -46,6 +46,7 @@
 #include "modes/world.hpp"
 #include "network/protocols/client_lobby.hpp"
 #include "network/network_config.hpp"
+#include "race/race_manager.hpp"
 #include "states_screens/race_gui_multitouch.hpp"
 #include "tracks/track.hpp"
 #include "utils/constants.hpp"
@@ -223,6 +224,32 @@ void RaceGUIBase::recreateGUI()
     assert(track != NULL);
     track->updateMiniMapScale();
 }  // recreateGUI
+
+//-----------------------------------------------------------------------------
+/** Creates or destroys the multitouch HUD while a race is running. Mirrors
+ *  the construction rule in RaceGUI / RaceGUIOverworld: only for a single
+ *  local player, and only when the buttons are wanted at all.
+ */
+void RaceGUIBase::setMultitouchEnabled(bool enabled)
+{
+    if (enabled)
+    {
+        if (m_multitouch_gui != NULL)
+            return;
+        if (!UserConfigParams::m_multitouch_draw_gui ||
+            RaceManager::get()->getNumLocalPlayers() != 1)
+            return;
+        m_multitouch_gui = new RaceGUIMultitouch(this);
+    }
+    else
+    {
+        if (m_multitouch_gui == NULL)
+            return;
+        delete m_multitouch_gui;
+        m_multitouch_gui = NULL;
+    }
+    recreateGUI();
+}   // setMultitouchEnabled
 
 //-----------------------------------------------------------------------------
 /** Creates the 2D vertices for a regular polygon. Adopted from Irrlicht.

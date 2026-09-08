@@ -21,6 +21,7 @@
 #include "graphics/irr_driver.hpp"
 #include "guiengine/engine.hpp"
 #include "guiengine/screen_keyboard.hpp"
+#include "input/input_hotplug.hpp"
 #include "guiengine/layout_manager.hpp"
 #include "guiengine/widget.hpp"
 #include "guiengine/widgets/button_widget.hpp"
@@ -558,7 +559,15 @@ bool ScreenKeyboard::onEscapePressed()
  */
 bool ScreenKeyboard::shouldUseScreenKeyboard()
 {
-    return UserConfigParams::m_screen_keyboard == 1;
+    if (UserConfigParams::m_screen_keyboard != 1)
+        return false;
+    // Touch mode "Always" (2) means the player asked for the touch UI no
+    // matter what is plugged in. Otherwise a real keyboard makes the
+    // on-screen one redundant -- and it would sit over the text box.
+    if (UserConfigParams::m_multitouch_active != 2 &&
+        InputHotplug::hasHardwareKeyboard())
+        return false;
+    return true;
 }
 
 // ----------------------------------------------------------------------------

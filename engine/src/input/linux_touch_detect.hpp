@@ -11,13 +11,67 @@
 #include <unistd.h>
 #endif
 
-/** Linux /proc and DMI helpers for touchscreen vs keyboard.
- *  Used by Irrlicht SDL (supportsTouchDevice) and STK (touch-only policy). */
+#if defined(__linux__) && !defined(ANDROID)
+#include <dirent.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <sys/ioctl.h>
+#endif
+
+/** Linux /proc, /dev/input and DMI helpers for touchscreen vs keyboard.
+ *  Used by Irrlicht SDL (supportsTouchDevice) and STK (touch-only policy,
+ *  live hot-plug watcher). Everything here is header-only so the Irrlicht
+ *  library and the game share one implementation. */
 namespace LinuxTouchDetect
 {
-    const int KEY_A = 30;
-    const int ABS_MT_POSITION_X = 53;
-    const int INPUT_PROP_DIRECT = 1;
+    const int KEY_A_BIT = 30;
+    const int ABS_MT_POSITION_X_BIT = 53;
+    const int INPUT_PROP_DIRECT_BIT = 1;
+
+    /** One reading of the input hardware. */
+    struct Snapshot
+    {
+        /** A direct-touch input device (touchscreen) exists. */
+        bool m_touch;
+        /** A real alphabetic keyboard exists (virtual and button-only
+         *  devices are ignored). */
+        bool m_keyboard;
+        /** One of those keyboards is on USB or Bluetooth -- plugged in by
+         *  the player rather than part of the chassis. */
+        bool m_external_keyboard;
+        /** The firmware reports a tablet-mode switch, and it is engaged:
+         *  a detachable keyboard is detached or folded away. */
+        bool m_tablet_mode;
+        /** Whether a tablet-mode switch was found at all. */
+        bool m_has_tablet_switch;
+
+        Snapshot()
+            : m_touch(false), m_keyboard(false), m_external_keyboard(false),
+              m_tablet_mode(false), m_has_tablet_switch(false)
+        {
+        }
+
+        bool operator==(const Snapshot& o) const
+        {
+            return m_touch == o.m_touch && m_keyboard == o.m_keyboard &&
+                   m_external_keyboard == o.m_external_keyboard &&
+                   m_tablet_mode == o.m_tablet_mode &&
+                   m_has_tablet_switch == o.m_has_tablet_switch;
+        }
+        bool operator!=(const Snapshot& o) const { return !(*this == o); }
+
+        /** A keyboard the player can actually type on right now. A tablet
+         *  mode switch that says "tablet" overrides the built-in keyboard: a
+         *  Surface keeps its Type Cover listed while it is folded back. A
+         *  USB or Bluetooth keyboard is not part of the chassis, so it counts
+         *  whatever the switch says. */
+        bool usableKeyboard() const
+        {
+            if (m_external_keyboard)
+                return true;
+            return m_keyboard && !m_tablet_mode;
+        }
+    };
 
     inline bool containsI(const char* hay, const char* needle)
     {
@@ -42,6 +96,9 @@ namespace LinuxTouchDetect
         return false;
     }
 
+    /** Devices that advertise KEY_A without being a keyboard anyone types on:
+     *  buttons, media controls, and the virtual keyboards that remappers
+     *  (keyd, ydotool, xdotool, uinput tools) keep permanently plugged in. */
     inline bool ignoredKeyboardName(const char* name)
     {
         if (!name || !name[0])
@@ -54,7 +111,15 @@ namespace LinuxTouchDetect
                containsI(name, "headset") ||
                containsI(name, "hdmi") ||
                containsI(name, "sof-hda") ||
-               containsI(name, "consumer control");
+               containsI(name, "consumer control") ||
+               containsI(name, "tablet mode") ||
+               containsI(name, "keyd") ||
+               containsI(name, "virtual") ||
+               containsI(name, "uinput") ||
+               containsI(name, "ydotool") ||
+               containsI(name, "xdotool") ||
+               containsI(name, "wlroots") ||
+               containsI(name, "remote desktop");
     }
 
     inline bool bitmapHasBit(const char* hex, unsigned bit)
@@ -90,7 +155,12 @@ namespace LinuxTouchDetect
         return (words[idx] & (1UL << bit_in_word)) != 0;
     }
 
-    inline void scanProcBusInput(bool* has_touch, bool* has_keyboard)
+    /** Linux input bus ids that mean "plugged in by the player". */
+    const unsigned INPUT_BUS_USB_ID = 0x03;
+    const unsigned INPUT_BUS_BLUETOOTH_ID = 0x05;
+
+    inline void scanProcBusInput(bool* has_touch, bool* has_keyboard,
+                                 bool* has_external_keyboard = NULL)
     {
         FILE* f = std::fopen("/proc/bus/input/devices", "r");
         if (!f)
@@ -98,12 +168,15 @@ namespace LinuxTouchDetect
         char line[512];
         char name[256];
         unsigned prop = 0;
+        unsigned bus = 0;
         bool key_a = false;
         bool abs_mt = false;
         name[0] = 0;
         while (std::fgets(line, sizeof(line), f))
         {
-            if (std::strncmp(line, "N: Name=\"", 9) == 0)
+            if (std::strncmp(line, "I: Bus=", 7) == 0)
+                bus = (unsigned)std::strtoul(line + 7, NULL, 16);
+            else if (std::strncmp(line, "N: Name=\"", 9) == 0)
             {
                 name[0] = 0;
                 std::sscanf(line, "N: Name=\"%255[^\"]\"", name);
@@ -111,25 +184,76 @@ namespace LinuxTouchDetect
             else if (std::strncmp(line, "B: PROP=", 8) == 0)
                 prop = (unsigned)std::strtoul(line + 8, NULL, 16);
             else if (std::strncmp(line, "B: KEY=", 7) == 0)
-                key_a = bitmapHasBit(line + 7, KEY_A);
+                key_a = bitmapHasBit(line + 7, KEY_A_BIT);
             else if (std::strncmp(line, "B: ABS=", 7) == 0)
-                abs_mt = bitmapHasBit(line + 7, ABS_MT_POSITION_X);
+                abs_mt = bitmapHasBit(line + 7, ABS_MT_POSITION_X_BIT);
             else if (line[0] == '\n' || line[0] == '\r' || line[0] == 0)
             {
-                if ((prop & (1u << INPUT_PROP_DIRECT)) ||
+                if ((prop & (1u << INPUT_PROP_DIRECT_BIT)) ||
                     containsI(name, "touchscreen"))
                     *has_touch = true;
                 else if (abs_mt && !(prop & 1u) && containsI(name, "touch"))
                     *has_touch = true;
                 if (key_a && !ignoredKeyboardName(name))
+                {
                     *has_keyboard = true;
+                    if (has_external_keyboard &&
+                        (bus == INPUT_BUS_USB_ID || bus == INPUT_BUS_BLUETOOTH_ID))
+                        *has_external_keyboard = true;
+                }
                 name[0] = 0;
                 prop = 0;
+                bus = 0;
                 key_a = false;
                 abs_mt = false;
             }
         }
         std::fclose(f);
+    }
+
+    /** Read the SW_TABLET_MODE switch, when the platform exposes one and
+     *  /dev/input is readable (Flatpak needs --device=input for that).
+     *  \param found Set true when at least one device has the switch.
+     *  \return true when tablet mode is engaged on any such device. */
+    inline bool readTabletMode(bool* found)
+    {
+        *found = false;
+#if defined(__linux__) && !defined(ANDROID)
+        DIR* dir = opendir("/dev/input");
+        if (!dir)
+            return false;
+        bool engaged = false;
+        struct dirent* ent;
+        while ((ent = readdir(dir)) != NULL)
+        {
+            if (std::strncmp(ent->d_name, "event", 5) != 0)
+                continue;
+            std::string path = std::string("/dev/input/") + ent->d_name;
+            int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+            if (fd < 0)
+                continue;
+            unsigned long caps[(SW_MAX + 1 + 8 * sizeof(long) - 1) /
+                               (8 * sizeof(long))];
+            std::memset(caps, 0, sizeof(caps));
+            if (ioctl(fd, EVIOCGBIT(EV_SW, sizeof(caps)), caps) >= 0 &&
+                (caps[SW_TABLET_MODE / (8 * sizeof(long))] &
+                 (1UL << (SW_TABLET_MODE % (8 * sizeof(long))))))
+            {
+                *found = true;
+                unsigned long state[sizeof(caps) / sizeof(caps[0])];
+                std::memset(state, 0, sizeof(state));
+                if (ioctl(fd, EVIOCGSW(sizeof(state)), state) >= 0 &&
+                    (state[SW_TABLET_MODE / (8 * sizeof(long))] &
+                     (1UL << (SW_TABLET_MODE % (8 * sizeof(long))))))
+                    engaged = true;
+            }
+            close(fd);
+        }
+        closedir(dir);
+        return engaged;
+#else
+        return false;
+#endif
     }
 
     inline int chassisType()
@@ -178,39 +302,43 @@ namespace LinuxTouchDetect
         return click && click[0];
     }
 
+    /** Take one full reading of the hardware. Cheap enough to run once a
+     *  second: one small procfs read and a handful of ioctls. */
+    inline Snapshot snapshot()
+    {
+        Snapshot s;
+        scanProcBusInput(&s.m_touch, &s.m_keyboard, &s.m_external_keyboard);
+        s.m_tablet_mode = readTabletMode(&s.m_has_tablet_switch);
+        if (isUbuntuTouch())
+        {
+            s.m_touch = true;
+            // A phone with a keyboard paired is still a keyboard-first
+            // device while it is paired; only the built-in assumption goes.
+            s.m_keyboard = s.m_external_keyboard;
+        }
+        const int chassis = chassisType();
+        // SMBIOS: 11 hand held, 30 tablet. Convertibles (31) and
+        // detachables (32) are decided by the tablet-mode switch above.
+        // A plugged-in keyboard counts on any chassis.
+        if ((chassis == 11 || chassis == 30) && s.m_touch)
+            s.m_keyboard = s.m_external_keyboard;
+        return s;
+    }
+
     inline bool hasTouchscreen()
     {
-        bool touch = false;
-        bool keyboard = false;
-        scanProcBusInput(&touch, &keyboard);
-        if (isUbuntuTouch())
-            touch = true;
-        return touch;
+        return snapshot().m_touch;
     }
 
     inline bool hasHardwareKeyboard()
     {
-        bool touch = false;
-        bool keyboard = false;
-        scanProcBusInput(&touch, &keyboard);
-        if (isUbuntuTouch())
-            return false;
-        const int chassis = chassisType();
-        if (chassis == 11 || chassis == 30)
-            return false;
-        return keyboard;
+        return snapshot().usableKeyboard();
     }
 
     inline bool isTouchOnly()
     {
-        if (isUbuntuTouch())
-            return true;
-        const int chassis = chassisType();
-        bool touch = hasTouchscreen();
-        bool keyboard = hasHardwareKeyboard();
-        if ((chassis == 11 || chassis == 30) && touch)
-            return true;
-        return touch && !keyboard;
+        const Snapshot s = snapshot();
+        return s.m_touch && !s.usableKeyboard();
     }
 }
 

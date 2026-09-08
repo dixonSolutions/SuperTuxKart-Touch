@@ -11,6 +11,9 @@ finish-args:
   - --socket=fallback-x11
   - --socket=pulseaudio
   - --device=dri
+  # The keyboard hot-plug watcher reads the SW_TABLET_MODE switch from
+  # /dev/input (a folded-back Type Cover stays listed in /proc otherwise).
+  - --device=input
   - --filesystem=xdg-data/supertuxkart-touch:create
   - --filesystem=xdg-config/supertuxkart:create
   # Reuse Flathub STK assets (tracks/karts) — system *and* user installs (tablets often use --user).

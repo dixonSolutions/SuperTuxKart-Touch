@@ -74,7 +74,12 @@ jobs:
           manifest-path: flatpak/io.github.dixonSolutions.SuperTuxKartTouch.yml
           arch: ${{ matrix.arch }}
           keep-build-dirs: true
-          cache-key: stk-touch-${{ matrix.arch }}-v2-${{ hashFiles('flatpak/*.yml', 'scripts/**', 'packaging/**', 'engine/CMakeLists.txt') }}
+          # The action only falls back to caches whose key starts with
+          # "flatpak-builder-<arch>", and never re-saves an exact hit. A key
+          # per commit under that prefix means every run restores the newest
+          # ccache and saves its own, instead of a full rebuild whenever a
+          # script changed and a frozen cache when nothing did.
+          cache-key: flatpak-builder-${{ matrix.arch }}-stk-v3-${{ github.sha }}
           restore-cache: true
 
       - uses: actions/upload-artifact@v4
@@ -93,6 +98,17 @@ jobs:
         arch: [arm64, armhf]
     steps:
       - uses: actions/checkout@v4
+
+      # Clickable compiles inside its container; ccache lives in the
+      # workspace so it survives between runs. Same per-commit key scheme
+      # as the Android job.
+      - name: Cache ccache (click)
+        uses: actions/cache@v4
+        with:
+          path: build/ccache-click-${{ matrix.arch }}
+          key: stk-click-ccache-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            stk-click-ccache-${{ matrix.arch }}-
 
       - name: Build Click package
         uses: tuxecure/clickable@v2
@@ -231,6 +247,7 @@ jobs:
           cp release/click-armhf/*.click release/upload/
           cp release/android-arm64-v8a/*.apk release/upload/
           cp release/android-armeabi-v7a/*.apk release/upload/
+          cp release/android-x86_64/*.apk release/upload/
           ls -la release/upload/
           {
             echo "## SuperTuxTouch ${VERSION}"
@@ -266,6 +283,7 @@ jobs:
             echo
             echo "- \`SuperTuxKartTouch-${VERSION}-arm64-v8a.apk\`"
             echo "- \`SuperTuxKartTouch-${VERSION}-armeabi-v7a.apk\`"
+            echo "- \`SuperTuxKartTouch-${VERSION}-x86_64.apk\` (Chromebooks, Waydroid, emulators)"
             echo
             echo "Karts and tracks are bundled — no first-launch download."
             echo
@@ -288,6 +306,7 @@ jobs:
       - name: Verify the release can drive in-app updates
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATE_FEED_ABIS: arm64-v8a armeabi-v7a x86_64
         run: bash scripts/android-verify-update-feed.sh
 
   openstore:

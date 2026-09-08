@@ -23,10 +23,12 @@
 #include "guiengine/widgets/spinner_widget.hpp"
 #include "guiengine/widgets/ribbon_widget.hpp"
 #include "input/device_manager.hpp"
+#include "input/input_hotplug.hpp"
 #include "input/input_manager.hpp"
 #include "input/multitouch_device.hpp"
 #include "modes/world.hpp"
 #include "states_screens/race_gui_multitouch.hpp"
+#include "utils/string_utils.hpp"
 #include "utils/translation.hpp"
 
 #include <IrrlichtDevice.h>
@@ -209,7 +211,7 @@ GUIEngine::EventPropagation MultitouchSettingsDialog::processEvent(
                 touch_device->updateConfigParams();
             }
 
-            input_manager->getDeviceManager()->updateMultitouchAvailability();
+            InputHotplug::refresh(false);
 
             if (World::getWorld() && World::getWorld()->getRaceGUI())
             {

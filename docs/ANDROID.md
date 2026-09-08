@@ -98,8 +98,22 @@ one:
 * **Not now** asks again next launch.
 * **Skip this version** suppresses that one release.
 
-Android confirms every package install itself, so the app cannot update behind
-the player's back, and a failed or slow check never delays the game.
+Android confirms the first in-app install itself. On Android 12 and newer the
+app then becomes the package's *installer of record*, and every later update
+goes through `PackageInstaller` with `USER_ACTION_NOT_REQUIRED` (the manifest
+declares `UPDATE_PACKAGES_WITHOUT_USER_ACTION` for it), so the player is not
+asked again: the check runs, the APK streams in, the upgrade lands, the game
+restarts on the new build. A sideloaded first install still asks once, because
+its installer of record is the file manager or browser that placed it.
+
+The check runs at launch and again from `onResume()` once the game has been in
+the background for more than an hour, so a phone that is never cold-started
+still picks up releases. "Not now" holds for the rest of the session rather
+than for the next resume. A failed or slow check never delays the game.
+
+Releases carry `arm64-v8a`, `armeabi-v7a` and `x86_64` APKs; the last one is
+for Chromebooks, Waydroid and the emulator, and is how the updater gets
+exercised on a desktop before a release.
 
 `scripts/android-verify-update-feed.sh` runs after each release and fails the
 build if the release could not drive an update. The updater finds its download

@@ -20,7 +20,7 @@
 #include "challenges/story_mode_timer.hpp"
 #include "config/player_manager.hpp"
 #include "config/user_config.hpp"
-#include "input/linux_touch_detect.hpp"
+#include "input/input_hotplug.hpp"
 #include "font/bold_face.hpp"
 #include "font/digit_face.hpp"
 #include "font/font_manager.hpp"
@@ -406,16 +406,9 @@ void IrrDriver::createListOfVideoModes()
 
 bool IrrDriver::isTouchOnlyDevice() const
 {
-#if defined(ANDROID) || defined(IOS_STK)
-    return true;
-#elif defined(__linux__)
-    if (m_device && m_device->supportsTouchDevice() &&
-        !m_device->hasHardwareKeyboard())
-        return true;
-    return LinuxTouchDetect::isTouchOnly();
-#else
-    return false;
-#endif
+    // Live answer: the watcher re-reads the hardware while the game runs,
+    // so a keyboard that arrives mid-session is seen here at once.
+    return InputHotplug::hasTouchscreen() && !InputHotplug::hasHardwareKeyboard();
 }
 
 bool IrrDriver::isMultitouchEnabled() const
