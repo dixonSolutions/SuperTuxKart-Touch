@@ -95,6 +95,10 @@ not a gamepad, or a configuration reporting an unfolded hard keyboard.
 
 Testing without hardware: a `uinput` keyboard on bus 0x03 named anything
 but `virtual` triggers the same path (see `scripts/fake-keyboard.py`).
+Touch itself can be injected the same way: `scripts/fake-touch.py tap:X:Y`
+creates a `uinput` touchscreen for the run and taps native screen pixels,
+which the compositor delivers as real touch events (a remote pointer click
+is not the same thing to SDL).
 
 ## Upstream
 
