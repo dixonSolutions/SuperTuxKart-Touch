@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -159,6 +160,23 @@ namespace LinuxTouchDetect
     const unsigned INPUT_BUS_USB_ID = 0x03;
     const unsigned INPUT_BUS_BLUETOOTH_ID = 0x05;
 
+    /** The whole of /proc/bus/input/devices. About 0.1 ms; safe to read
+     *  every second, and its text changing is the only reason to touch
+     *  /dev/input, which is hundreds of times more expensive. */
+    inline std::string readProcBusInput()
+    {
+        std::string out;
+        FILE* f = std::fopen("/proc/bus/input/devices", "r");
+        if (!f)
+            return out;
+        char buf[4096];
+        size_t n;
+        while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0)
+            out.append(buf, n);
+        std::fclose(f);
+        return out;
+    }
+
     inline void scanProcBusInput(bool* has_touch, bool* has_keyboard,
                                  bool* has_external_keyboard = NULL)
     {
@@ -211,49 +229,105 @@ namespace LinuxTouchDetect
         std::fclose(f);
     }
 
-    /** Read the SW_TABLET_MODE switch, when the platform exposes one and
-     *  /dev/input is readable (Flatpak needs --device=input for that).
+    /** The SW_TABLET_MODE switch devices, opened once and kept.
+     *
+     *  Opening every /dev/input node costs about 0.4 s on a Surface (the
+     *  IPTS virtual devices are slow to open), which is a visible hitch if
+     *  done per poll. The switch fds are found once and re-found only when
+     *  the procfs device list changes; reading their state is one ioctl,
+     *  well under a microsecond. Flatpak needs --device=input for any of
+     *  this; without it there is simply no switch. */
+    class TabletSwitch
+    {
+    public:
+        TabletSwitch() : m_scanned(false) {}
+        ~TabletSwitch() { closeAll(); }
+
+        /** Walk /dev/input once and keep the fds that have the switch. */
+        void rescan()
+        {
+            closeAll();
+            m_scanned = true;
+#if defined(__linux__) && !defined(ANDROID)
+            DIR* dir = opendir("/dev/input");
+            if (!dir)
+                return;
+            struct dirent* ent;
+            while ((ent = readdir(dir)) != NULL)
+            {
+                if (std::strncmp(ent->d_name, "event", 5) != 0)
+                    continue;
+                std::string path = std::string("/dev/input/") + ent->d_name;
+                int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+                if (fd < 0)
+                    continue;
+                unsigned long caps[(SW_MAX + 1 + 8 * sizeof(long) - 1) /
+                                   (8 * sizeof(long))];
+                std::memset(caps, 0, sizeof(caps));
+                if (ioctl(fd, EVIOCGBIT(EV_SW, sizeof(caps)), caps) >= 0 &&
+                    (caps[SW_TABLET_MODE / (8 * sizeof(long))] &
+                     (1UL << (SW_TABLET_MODE % (8 * sizeof(long))))))
+                    m_fds.push_back(fd);
+                else
+                    close(fd);
+            }
+            closedir(dir);
+#endif
+        }
+
+        bool scanned() const { return m_scanned; }
+        bool found() const { return !m_fds.empty(); }
+
+        /** Current state from the kept fds. A device that went away makes
+         *  the ioctl fail; the caller rescans on the next list change. */
+        bool engaged() const
+        {
+#if defined(__linux__) && !defined(ANDROID)
+            for (size_t i = 0; i < m_fds.size(); i++)
+            {
+                unsigned long state[(SW_MAX + 1 + 8 * sizeof(long) - 1) /
+                                    (8 * sizeof(long))];
+                std::memset(state, 0, sizeof(state));
+                if (ioctl(m_fds[i], EVIOCGSW(sizeof(state)), state) >= 0 &&
+                    (state[SW_TABLET_MODE / (8 * sizeof(long))] &
+                     (1UL << (SW_TABLET_MODE % (8 * sizeof(long))))))
+                    return true;
+            }
+#endif
+            return false;
+        }
+
+    private:
+        void closeAll()
+        {
+#if defined(__linux__) && !defined(ANDROID)
+            for (size_t i = 0; i < m_fds.size(); i++)
+                close(m_fds[i]);
+#endif
+            m_fds.clear();
+        }
+        std::vector<int> m_fds;
+        bool m_scanned;
+    };
+
+    /** Process-wide switch reader; see TabletSwitch. */
+    inline TabletSwitch& tabletSwitch()
+    {
+        static TabletSwitch s;
+        return s;
+    }
+
+    /** Read the SW_TABLET_MODE switch through the kept fds, scanning
+     *  /dev/input the first time only.
      *  \param found Set true when at least one device has the switch.
      *  \return true when tablet mode is engaged on any such device. */
     inline bool readTabletMode(bool* found)
     {
-        *found = false;
-#if defined(__linux__) && !defined(ANDROID)
-        DIR* dir = opendir("/dev/input");
-        if (!dir)
-            return false;
-        bool engaged = false;
-        struct dirent* ent;
-        while ((ent = readdir(dir)) != NULL)
-        {
-            if (std::strncmp(ent->d_name, "event", 5) != 0)
-                continue;
-            std::string path = std::string("/dev/input/") + ent->d_name;
-            int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-            if (fd < 0)
-                continue;
-            unsigned long caps[(SW_MAX + 1 + 8 * sizeof(long) - 1) /
-                               (8 * sizeof(long))];
-            std::memset(caps, 0, sizeof(caps));
-            if (ioctl(fd, EVIOCGBIT(EV_SW, sizeof(caps)), caps) >= 0 &&
-                (caps[SW_TABLET_MODE / (8 * sizeof(long))] &
-                 (1UL << (SW_TABLET_MODE % (8 * sizeof(long))))))
-            {
-                *found = true;
-                unsigned long state[sizeof(caps) / sizeof(caps[0])];
-                std::memset(state, 0, sizeof(state));
-                if (ioctl(fd, EVIOCGSW(sizeof(state)), state) >= 0 &&
-                    (state[SW_TABLET_MODE / (8 * sizeof(long))] &
-                     (1UL << (SW_TABLET_MODE % (8 * sizeof(long))))))
-                    engaged = true;
-            }
-            close(fd);
-        }
-        closedir(dir);
-        return engaged;
-#else
-        return false;
-#endif
+        TabletSwitch& sw = tabletSwitch();
+        if (!sw.scanned())
+            sw.rescan();
+        *found = sw.found();
+        return sw.engaged();
     }
 
     inline int chassisType()

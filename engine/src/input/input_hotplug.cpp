@@ -43,6 +43,10 @@ namespace
 
     /** Last hardware reading (Linux). */
     LinuxTouchDetect::Snapshot g_snapshot;
+    /** /proc/bus/input/devices as of the last full scan. Cheap to read and
+     *  to compare; it changes exactly when a device comes or goes, which
+     *  is the only time the expensive /dev/input walk is worth doing. */
+    std::string g_proc_text;
 
     /** Android's answer, written by the UI thread and read on the game
      *  thread. -1 = never told, 0 = no keyboard, 1 = keyboard. */
@@ -81,7 +85,23 @@ namespace
     void scan()
     {
 #if defined(__linux__) && !defined(ANDROID)
-        g_snapshot = LinuxTouchDetect::snapshot();
+        const std::string proc = LinuxTouchDetect::readProcBusInput();
+        if (proc != g_proc_text || !LinuxTouchDetect::tabletSwitch().scanned())
+        {
+            // A device came or went: parse the list again and re-find the
+            // switch fds (the device numbering may have shifted).
+            g_proc_text = proc;
+            LinuxTouchDetect::tabletSwitch().rescan();
+            g_snapshot = LinuxTouchDetect::snapshot();
+        }
+        else
+        {
+            // Same devices: only the switch state can have moved, and that
+            // is one ioctl on an fd we already hold.
+            bool found = false;
+            g_snapshot.m_tablet_mode = LinuxTouchDetect::readTabletMode(&found);
+            g_snapshot.m_has_tablet_switch = found;
+        }
 #endif
         const int android = g_android_keyboard.load();
         if (android >= 0)

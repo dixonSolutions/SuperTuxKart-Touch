@@ -70,8 +70,11 @@ cover folded back is.
 | ![glass stick and buttons](media/race-surface.jpg) | ![classic keyboard HUD, no overlay](media/race-surface-keyboard.jpg) |
 
 `InputHotplug::update()` runs every frame from the main loop and re-reads
-the hardware about once a second (one procfs read and a few ioctls). When
-the answer changes -- a Type Cover clicks on, a Bluetooth keyboard pairs, a
+the hardware about once a second. The per-second work is one read of
+`/proc/bus/input/devices` (about 0.1 ms) and one ioctl per kept
+tablet-switch descriptor; `/dev/input` is walked only when that listing
+changes, because opening every event node costs about 0.4 s on a Surface
+and a walk per second is a visible, rhythmic stall. When the answer changes -- a Type Cover clicks on, a Bluetooth keyboard pairs, a
 convertible folds -- it:
 
 - creates or destroys the `MultitouchDevice` and the race HUD in place, so
