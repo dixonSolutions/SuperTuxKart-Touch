@@ -27,6 +27,7 @@
 #include "guiengine/widgets/progress_bar_widget.hpp"
 #include "guiengine/widgets/ribbon_widget.hpp"
 #include "states_screens/options/options_common.hpp"
+#include "utils/string_utils.hpp"
 #include "utils/touch_update_status.hpp"
 #include "utils/translation.hpp"
 

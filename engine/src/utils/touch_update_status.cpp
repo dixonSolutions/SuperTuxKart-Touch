@@ -22,7 +22,9 @@
 #include "utils/string_utils.hpp"
 #include "utils/translation.hpp"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 
@@ -147,7 +149,15 @@ bool TouchUpdate::request(const std::string& token)
 irr::core::stringw TouchUpdate::versionLine(const Status& status)
 {
     if (status.m_installed.empty())
+    {
+        // Nothing published a version. Where a package manager owns updates
+        // that is every launch, and a Flatpak or OpenStore install is not a
+        // development build -- only a self-updating platform with nothing
+        // published yet has earned that label.
+        if (status.m_state == STATE_MANAGED)
+            return _("SuperTuxKart Touch");
         return _("SuperTuxKart Touch (development build)");
+    }
     return _("SuperTuxKart Touch %s", status.m_installed.c_str());
 }   // versionLine
 
