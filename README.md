@@ -4,7 +4,7 @@ Touch-first [SuperTuxKart](https://supertuxkart.net/) for Linux tablets and phon
 
 ![SuperTuxTouch mid-race on a Surface Pro 9: glass steering stick on the left, drift, nitro, item, look-back and rescue buttons on the right](docs/media/race-surface.jpg)
 
-*Cornfield Crossing on a Surface Pro 9 (Ultramarine Linux, Flatpak, 2880×1920). The on-screen controls appear only on touch-only hardware: plug a keyboard in and they go away, unplug it and they come back, live, with a toast.*
+*Cornfield Crossing on a Surface Pro 9 (Ultramarine Linux, Flatpak, 2880×1920). The on-screen controls appear only on touch-only hardware: plug a keyboard in and they go away, unplug it and they come back, live, with a toast. They also follow what you actually use: put a finger on the screen and they come back even with the keyboard attached; drive with the keys or pick up a gamepad and they step aside.*
 
 | | |
 |---|---|

@@ -22,6 +22,26 @@ same product on every touch target. Android keeps its own graphics tuning from
 | min / target SDK | 21 / 35 |
 | Assets | Bundled in the APK (`stk-assets.zip`, the upstream mobile set) |
 
+## Permissions
+
+The APK asks for nothing that prompts. `aapt2 dump permissions` on a build:
+
+| Permission | Why | Prompts? |
+|---|---|---|
+| `INTERNET` | Add-ons, online play, the update feed | No (normal) |
+| `ACCESS_NETWORK_STATE` | Skip automatic update downloads on metered networks | No (normal) |
+| `VIBRATE` | Gamepad rumble (`InputDevice.getVibrator()`) | No (normal) |
+| `REQUEST_INSTALL_PACKAGES` | The self-updater installs the next release | No runtime prompt; Android asks once to allow installs from this app when the first update is installed |
+| `UPDATE_PACKAGES_WITHOUT_USER_ACTION` | Android 12+: later updates install without the confirm dialog | No (normal) |
+
+There is deliberately no storage, Bluetooth, location or other dangerous
+permission. Game data, config (`home/` inside the data dir) and add-ons live
+in the app's own storage -- `Android/data/<package>/files` or the internal
+files dir, both permission-free -- and `AssetsAndroid` never looks at
+`/sdcard` or other shared storage. Bluetooth controllers and keyboards work
+through the input system; only SDL's direct Steam Controller BLE driver would
+need `BLUETOOTH_CONNECT`, and it stays off.
+
 ## Building locally
 
 ```bash
