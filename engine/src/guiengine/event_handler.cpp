@@ -32,6 +32,7 @@
 #include "guiengine/widgets/list_widget.hpp"
 #include "guiengine/widgets/ribbon_widget.hpp"
 #include "guiengine/widgets/spinner_widget.hpp"
+#include "input/input_hotplug.hpp"
 #include "input/input_manager.hpp"
 #include "modes/demo_world.hpp"
 #include "modes/world.hpp"
@@ -70,6 +71,13 @@ EventHandler::~EventHandler()
 bool EventHandler::OnEvent (const SEvent &event)
 {
     if (!m_accept_events && event.EventType != EET_LOG_TEXT_EVENT) return true;
+
+    // Before anything can swallow it (the screen keyboard, a dialog, the
+    // menus, which never pass touches on): what the player is using decides
+    // whether the touch controls are shown.
+    if (event.EventType == EET_TOUCH_INPUT_EVENT ||
+        event.EventType == EET_KEY_INPUT_EVENT)
+        InputHotplug::onInputEvent(event);
 
     if(!Debug::onEvent(event))
         return false;

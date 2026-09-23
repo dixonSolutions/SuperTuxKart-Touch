@@ -417,6 +417,19 @@ bool IrrDriver::isMultitouchEnabled() const
         return false;
     if (UserConfigParams::m_multitouch_active > 1)
         return true;
+    // Auto: what the player is actually using beats what is plugged in. A
+    // finger on the screen wants the controls even with a keyboard attached;
+    // driving with keys or a gamepad does not want them on a tablet.
+    switch (InputHotplug::activeInput())
+    {
+    case InputHotplug::AI_TOUCH:
+        return true;
+    case InputHotplug::AI_KEYBOARD:
+    case InputHotplug::AI_GAMEPAD:
+        return false;
+    default:
+        break;
+    }
     if (!m_device || !m_device->supportsTouchDevice())
         return false;
     if (UserConfigParams::m_multitouch_touch_only && !isTouchOnlyDevice())

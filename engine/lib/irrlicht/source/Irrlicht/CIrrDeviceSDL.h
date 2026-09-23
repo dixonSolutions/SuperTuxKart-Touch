@@ -106,6 +106,10 @@ class MoltenVK;
 
 		virtual bool supportsTouchDevice() const;
 
+		//! A touch SDL synthesised from a mouse, or from a relative
+		//! trackpad, rather than a finger on the screen.
+		static bool isSimulatedTouch(SDL_TouchID touch_id);
+
 		virtual bool hasHardwareKeyboard() const;
 
 		//! Get the device type

@@ -58,7 +58,15 @@
         android:name="android.hardware.type.pc"
         android:required="false" />
 
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- No storage, Bluetooth, location or other runtime ("dangerous")
+         permission, on purpose: nothing here makes Android show a prompt.
+         Game data, config and add-ons live in the app's own directories
+         (Context.getExternalFilesDir / getFilesDir), which need no
+         permission on any supported Android version; see
+         src/io/assets_android.cpp. Bluetooth gamepads and keyboards reach
+         the game through the input system and need no permission either;
+         only SDL's direct Steam Controller BLE driver would, and it simply
+         stays off. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Only to ask whether the active network is metered, so the automatic
          update path does not pull a whole APK over mobile data unasked. -->
@@ -71,10 +79,8 @@
          dialog. Without the permission setRequireUserAction is ignored. -->
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
-    <!-- Allow writing to external storage -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <!-- Allow access to Bluetooth devices -->
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <!-- Allow access to the vibrator -->
+    <!-- Gamepad rumble: SDL drives the controller's motor through
+         InputDevice.getVibrator(), which throws without this. A normal
+         install-time permission; it never prompts. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

@@ -97,33 +97,59 @@ public class SuperTuxKartActivity extends SDLActivity
     private boolean m_hardware_keyboard_reported;
     private boolean m_hardware_keyboard_known;
     // ------------------------------------------------------------------------
-    /** A keyboard someone can type on: an alphabetic, non-virtual input
-     *  device, or the configuration saying a hard keyboard is unfolded. The
-     *  system's own virtual keyboard device is excluded, as are gamepads
-     *  that happen to expose a few key codes. */
+    /** A keyboard someone can type on right now.
+     *
+     *  The device list decides, because the Configuration is too generous:
+     *  Android sets keyboard=QWERTY for any alphabetic device, gamepads and
+     *  receiver dongles included. The Configuration is still trusted to say
+     *  "no": hardKeyboardHidden=YES is a keyboard folded behind a tablet,
+     *  a closed keyboard cover, ChromeOS or DeX in tablet mode.
+     *
+     *  Counted: Bluetooth, USB and pogo-pin keyboards, keyboard-and-touchpad
+     *  combos. Not counted: the IME's virtual device, game controllers that
+     *  expose keys (SOURCE_GAMEPAD / SOURCE_JOYSTICK), remotes, styluses and
+     *  buttons (non-alphabetic), and uinput / virtual devices that remappers
+     *  and fingerprint readers register. A mouse whose receiver also
+     *  exposes a keyboard cannot be told apart from a keyboard here; the
+     *  game's last-input layer covers it (a touch brings the controls
+     *  back). Callable from any thread. */
     private boolean hasHardwareKeyboard()
     {
         try
         {
             Configuration c = getResources().getConfiguration();
-            if (c.keyboard == Configuration.KEYBOARD_QWERTY &&
-                c.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO)
-                return true;
+            if (c.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_YES)
+                return false;
             for (int id : InputDevice.getDeviceIds())
             {
                 InputDevice d = InputDevice.getDevice(id);
                 if (d == null || d.isVirtual())
                     continue;
-                if ((d.getSources() & InputDevice.SOURCE_KEYBOARD) !=
+                // ChromeOS and some convertibles disable the built-in
+                // keyboard in tablet mode rather than removing it.
+                if (Build.VERSION.SDK_INT >= 27 && !d.isEnabled())
+                    continue;
+                int sources = d.getSources();
+                if ((sources & InputDevice.SOURCE_KEYBOARD) !=
                     InputDevice.SOURCE_KEYBOARD)
                     continue;
                 if (d.getKeyboardType() != InputDevice.KEYBOARD_TYPE_ALPHABETIC)
                     continue;
                 // Gamepads and remotes report SOURCE_KEYBOARD too; a real
-                // keyboard is one that is not primarily a game controller.
-                if ((d.getSources() & InputDevice.SOURCE_GAMEPAD) ==
-                    InputDevice.SOURCE_GAMEPAD)
+                // keyboard is one that is not also a game controller.
+                if ((sources & InputDevice.SOURCE_GAMEPAD) ==
+                        InputDevice.SOURCE_GAMEPAD ||
+                    (sources & InputDevice.SOURCE_JOYSTICK) ==
+                        InputDevice.SOURCE_JOYSTICK)
                     continue;
+                String name = d.getName();
+                if (name != null)
+                {
+                    String n = name.toLowerCase(java.util.Locale.ROOT);
+                    if (n.contains("virtual") || n.contains("uinput") ||
+                        n.contains("fingerprint") || n.contains("gpio"))
+                        continue;
+                }
                 return true;
             }
         }
@@ -132,6 +158,13 @@ public class SuperTuxKartActivity extends SDLActivity
             // Never let an input service hiccup take the game down.
         }
         return false;
+    }
+    // ------------------------------------------------------------------------
+    /** Called by the game thread (JNI) at startup: the listener's first
+     *  report can come before the natives are registered and be lost. */
+    public boolean queryHardwareKeyboard()
+    {
+        return hasHardwareKeyboard();
     }
     // ------------------------------------------------------------------------
     private void reportHardwareKeyboard()
