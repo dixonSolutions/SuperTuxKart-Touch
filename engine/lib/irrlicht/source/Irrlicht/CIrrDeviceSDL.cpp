@@ -818,6 +818,7 @@ bool CIrrDeviceSDL::run()
 				removeTouchId(SDL_event.tfinger.fingerId);
 			irrevent.TouchInput.X = SDL_event.tfinger.x * getRealScreenSize().Width;
 			irrevent.TouchInput.Y = SDL_event.tfinger.y * getRealScreenSize().Height;
+			irrevent.TouchInput.Simulated = isSimulatedTouch(SDL_event.tfinger.touchId);
 			postEventFromUser(irrevent);
 			break;
 
@@ -1546,6 +1547,18 @@ void CIrrDeviceSDL::createKeyMap()
 	ScanCodeMap[SDL_SCANCODE_APPLICATION] = IRR_KEY_APPS;
 	ScanCodeMap[SDL_SCANCODE_MODE] = IRR_KEY_BUTTON_MODE;
 	ScanCodeMap[SDL_SCANCODE_MENU] = IRR_KEY_MENU;
+}
+
+
+bool CIrrDeviceSDL::isSimulatedTouch(SDL_TouchID touch_id)
+{
+#if SDL_VERSION_ATLEAST(2, 0, 10)
+	if (touch_id == SDL_MOUSE_TOUCHID)
+		return true;
+	if (SDL_GetTouchDeviceType(touch_id) == SDL_TOUCH_DEVICE_INDIRECT_RELATIVE)
+		return true;
+#endif
+	return false;
 }
 
 

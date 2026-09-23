@@ -83,6 +83,9 @@ private:
 
 #ifndef SERVER_ONLY
     std::map<int, std::unique_ptr<SDLController> > m_sdl_controller;
+    /** Per joystick and axis: pushed past the "in use" threshold. */
+    std::map<int64_t, bool> m_gamepad_axis_pushed;
+    void   noteGamepadAxis(int joystick, int axis, int value);
 #endif
 
 public:
