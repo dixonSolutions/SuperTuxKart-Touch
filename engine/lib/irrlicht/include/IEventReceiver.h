@@ -422,6 +422,12 @@ struct SEvent
 
 		//! Type of touch event.
 		ETOUCH_INPUT_EVENT Event;
+
+		//! Not a finger on the screen: SDL made it up from a mouse
+		//! (SDL_MOUSE_TOUCHID, on by default on Android) or it comes from a
+		//! relative trackpad. Still delivered, so on-screen buttons stay
+		//! clickable with a mouse, but it says nothing about touch use.
+		bool Simulated;
 	};
 
     

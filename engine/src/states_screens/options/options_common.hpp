@@ -40,6 +40,7 @@
 #include "states_screens/options/options_screen_input.hpp"
 #include "states_screens/options/options_screen_language.hpp"
 #include "states_screens/options/options_screen_ui.hpp"
+#include "states_screens/options/options_screen_updates.hpp"
 #include "states_screens/options/options_screen_video.hpp"
 #include "states_screens/options/user_screen.hpp"
 

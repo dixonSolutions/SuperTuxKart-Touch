@@ -22,6 +22,26 @@ same product on every touch target. Android keeps its own graphics tuning from
 | min / target SDK | 21 / 35 |
 | Assets | Bundled in the APK (`stk-assets.zip`, the upstream mobile set) |
 
+## Permissions
+
+The APK asks for nothing that prompts. `aapt2 dump permissions` on a build:
+
+| Permission | Why | Prompts? |
+|---|---|---|
+| `INTERNET` | Add-ons, online play, the update feed | No (normal) |
+| `ACCESS_NETWORK_STATE` | Skip automatic update downloads on metered networks | No (normal) |
+| `VIBRATE` | Gamepad rumble (`InputDevice.getVibrator()`) | No (normal) |
+| `REQUEST_INSTALL_PACKAGES` | The self-updater installs the next release | No runtime prompt; Android asks once to allow installs from this app when the first update is installed |
+| `UPDATE_PACKAGES_WITHOUT_USER_ACTION` | Android 12+: later updates install without the confirm dialog | No (normal) |
+
+There is deliberately no storage, Bluetooth, location or other dangerous
+permission. Game data, config (`home/` inside the data dir) and add-ons live
+in the app's own storage -- `Android/data/<package>/files` or the internal
+files dir, both permission-free -- and `AssetsAndroid` never looks at
+`/sdcard` or other shared storage. Bluetooth controllers and keyboards work
+through the input system; only SDL's direct Steam Controller BLE driver would
+need `BLUETOOTH_CONNECT`, and it stays off.
+
 ## Building locally
 
 ```bash
@@ -98,14 +118,74 @@ one:
 * **Not now** asks again next launch.
 * **Skip this version** suppresses that one release.
 
-Android confirms every package install itself, so the app cannot update behind
-the player's back, and a failed or slow check never delays the game.
+Android confirms the first in-app install itself. On Android 12 and newer the
+app then becomes the package's *installer of record*, and every later update
+goes through `PackageInstaller` with `USER_ACTION_NOT_REQUIRED` (the manifest
+declares `UPDATE_PACKAGES_WITHOUT_USER_ACTION` for it), so the player is not
+asked again: the check runs, the APK streams in, the upgrade lands, the game
+restarts on the new build. A sideloaded first install still asks once, because
+its installer of record is the file manager or browser that placed it.
+
+The check runs at launch and again from `onResume()` once the game has been in
+the background for more than an hour, so a phone that is never cold-started
+still picks up releases. "Not now" holds for the rest of the session rather
+than for the next resume. A failed or slow check never delays the game.
+
+Releases carry `arm64-v8a`, `armeabi-v7a` and `x86_64` APKs; the last one is
+for Chromebooks, Waydroid and the emulator, and is how the updater gets
+exercised on a desktop before a release.
 
 `scripts/android-verify-update-feed.sh` runs after each release and fails the
 build if the release could not drive an update. The updater finds its download
 by tag shape (`vX.Y.Z`) and asset filename (must contain the ABI), and both are
 conventions rather than contracts: renaming the APKs would strand every install
 on its current build with no error anywhere.
+
+### The in-game Updates screen
+
+`STKUpdateChecker` can only ask its question once, at launch, in a dialog that
+is gone before anyone is racing. Everything a player wants afterwards — which
+build am I on, how far behind, check again, stop asking — lives in
+**Options → Updates** instead.
+
+Options is C++ and the updater is Java, so rather than reach across that with
+JNI the two halves pass line-based files through the app's files directory.
+`STKUpdateBridge` owns `update-status.txt` and only writes it; the C++ side owns
+`update-request.txt` and only writes that. Neither reads its own file back, so
+there is no shared state to race over — a torn read costs one stale second and
+the screen re-reads on a timer.
+
+That directory is `getFilesDir()` rather than STK's config directory on purpose.
+The config path is assembled in `assets_android.cpp` from `HOME` plus
+`.config/supertuxkart`, and duplicating that derivation in Java would be a
+second copy to get wrong; both sides name this one by construction, C++ through
+SDL's internal storage path.
+
+The format is documented once, in `src/utils/touch_update_status.hpp`. Requests
+are `check`, `install`, `skip`, `auto-on` and `auto-off`, served by a poll
+thread `SuperTuxKartActivity` starts for the life of the process — without one,
+every button on that screen would write a file nothing ever reads.
+
+Every other platform has no half to serve those requests, so `TouchUpdate::read`
+answers `managed` there. The tab still names the build you are on and says to
+update it the way you installed it, rather than offering buttons nothing is
+behind.
+
+Auto-update is opt-out, so a player who never opens Options still gets fixes.
+Turning it off does not stop the check — the screen still has to say how far
+behind you are — it stops the install happening without being asked for. Android
+confirms every package install either way, so even "automatic" is one tap rather
+than none.
+
+The automatic path only runs on an unmetered network. On mobile data (or when
+the system cannot say), the launch check falls back to the dialog, which names
+the download size — that is the one question a metered download deserves, and
+the automatic path exists to skip a dialog, not to skip that. Explicit installs
+from the Updates screen are the player's call and are not gated.
+
+Xonotic Touch runs the identical contract between its Java updater and its
+QuakeC menu. The two projects' file formats are the same by intent; keep them in
+step.
 
 ### What the updater will and will not install
 
@@ -114,8 +194,13 @@ self-update model, and this is the part of it worth stating out loud: the only
 thing that ever reaches the package installer is an `.apk` release asset served
 by `github.com` for this repository's own path.
 
-`isTrustedApkUrl` enforces that — https, `github.com`, this repo, an `.apk`
-suffix, no `..` — and it is checked twice: once when picking the asset out of
+`isTrustedApkUrl` enforces that by anchoring the URL to a single prefix,
+`https://github.com/` + this repo + `/`, plus an `.apk` suffix and no `..`. The
+prefix has to be the whole path root, not merely a substring somewhere in the
+URL: a substring is not a path boundary, so asking only whether the URL
+*contained* the repo name accepted an owner whose name ends with ours, a repo
+whose name starts with ours, and any unrelated repo burying the string further
+down its path. It is checked twice: once when picking the asset out of
 the release feed, and again in `install()` immediately before the bytes are
 streamed into the `PackageInstaller` session. The second check is not
 redundant. It is the one guarding the actual install, and it does not depend on

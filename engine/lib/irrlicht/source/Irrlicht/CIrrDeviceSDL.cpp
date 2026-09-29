@@ -26,6 +26,7 @@
 #include "ge_vulkan_driver.hpp"
 #include "ge_vulkan_scene_manager.hpp"
 #include "MoltenVK.h"
+#include "input/linux_touch_detect.hpp"
 
 #include <SDL_vulkan.h>
 
@@ -817,6 +818,7 @@ bool CIrrDeviceSDL::run()
 				removeTouchId(SDL_event.tfinger.fingerId);
 			irrevent.TouchInput.X = SDL_event.tfinger.x * getRealScreenSize().Width;
 			irrevent.TouchInput.Y = SDL_event.tfinger.y * getRealScreenSize().Height;
+			irrevent.TouchInput.Simulated = isSimulatedTouch(SDL_event.tfinger.touchId);
 			postEventFromUser(irrevent);
 			break;
 
@@ -1548,9 +1550,34 @@ void CIrrDeviceSDL::createKeyMap()
 }
 
 
+bool CIrrDeviceSDL::isSimulatedTouch(SDL_TouchID touch_id)
+{
+#if SDL_VERSION_ATLEAST(2, 0, 10)
+	if (touch_id == SDL_MOUSE_TOUCHID)
+		return true;
+	if (SDL_GetTouchDeviceType(touch_id) == SDL_TOUCH_DEVICE_INDIRECT_RELATIVE)
+		return true;
+#endif
+	return false;
+}
+
+
 bool CIrrDeviceSDL::supportsTouchDevice() const
 {
-	return SDL_GetNumTouchDevices() > 0;
+	if (SDL_GetNumTouchDevices() > 0)
+		return true;
+	return LinuxTouchDetect::hasTouchscreen();
+}
+
+bool CIrrDeviceSDL::hasHardwareKeyboard() const
+{
+#if defined(ANDROID) || defined(IOS_STK)
+	return false;
+#elif defined(__linux__)
+	return LinuxTouchDetect::hasHardwareKeyboard();
+#else
+	return true;
+#endif
 }
 
 

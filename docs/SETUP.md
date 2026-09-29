@@ -2,7 +2,7 @@
 
 ## Architecture call
 
-New project (`SuperTuxKart-Touch`), not shared runtime code with Xonotic-Touch. STK already has multitouch devices, race GUI, touch settings dialog, and screen keyboard — this port turns those on by default and restyles the race HUD as glass.
+New project (`SuperTuxKart-Touch`), not shared runtime code with Xonotic-Touch. STK already has multitouch devices, race GUI, touch settings dialog, and screen keyboard — this port turns Auto-detect on for touch-only hardware and restyles the race HUD as glass.
 
 ## Build flags
 

@@ -52,7 +52,18 @@ void AssetsAndroid::init()
     bool needs_extract_data = false;
     const std::string version = std::string("supertuxkart.") + STK_VERSION;
 
-    // Add some paths to check
+    // Only the app's own directories, never shared storage. The external
+    // one (Android/data/<package>/files) and the internal one need no
+    // permission on any Android version this builds for; /sdcard and friends
+    // need READ/WRITE_EXTERNAL_STORAGE, a runtime prompt players rightly
+    // read as creepy for a racing game. Nothing is lost by it: that
+    // permission was never requested at runtime, so on Android 6+ the public
+    // paths always failed the isWritable() check below, and on 5.x (granted
+    // at install) the external app dir came first here and won the
+    // free-space tie in getPreferredPath(). Data, and the home/ config dir
+    // inside it, already lived in the app's own storage, and the search
+    // below still finds it there. A copy something else left in public
+    // storage is simply not looked at; assets re-extract from the APK.
     std::vector<std::string> paths;
 
     if (getenv("SUPERTUXKART_DATADIR"))
@@ -72,16 +83,6 @@ void AssetsAndroid::init()
         paths.push_back(internal_storage_path);
     }
 
-    if (getenv("EXTERNAL_STORAGE"))
-        paths.push_back(getenv("EXTERNAL_STORAGE"));
-
-    if (getenv("SECONDARY_STORAGE"))
-        paths.push_back(getenv("SECONDARY_STORAGE"));
-        
-    paths.push_back("/sdcard/");
-    paths.push_back("/storage/sdcard0/");
-    paths.push_back("/storage/sdcard1/");
-    
 #if !defined(ANDROID_PACKAGE_NAME) || !defined(ANDROID_APP_DIR_NAME)
     #error
 #endif

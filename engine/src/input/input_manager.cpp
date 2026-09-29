@@ -30,6 +30,7 @@
 #include "guiengine/screen_keyboard.hpp"
 #include "input/device_manager.hpp"
 #include "input/gamepad_device.hpp"
+#include "input/input_hotplug.hpp"
 #include "input/input.hpp"
 #include "input/keyboard_device.hpp"
 #include "input/multitouch_device.hpp"
@@ -171,6 +172,32 @@ extern "C" void handle_joystick(SDL_Event& event)
 }   // handle_joystick
 
 // -----------------------------------------------------------------------------
+/** A stick or trigger pushed well past its dead zone counts as someone using
+ *  the gamepad, once per push: the axis has to come back near the middle
+ *  before it counts again, so a resting trigger or a noisy stick is quiet. */
+void InputManager::noteGamepadAxis(int joystick, int axis, int value)
+{
+    const int PUSHED = 24000;
+    const int RELEASED = 12000;
+    const int64_t key = (int64_t)joystick * 256 + axis;
+    const int magnitude = value < 0 ? -value : value;
+    auto it = m_gamepad_axis_pushed.find(key);
+    if (it == m_gamepad_axis_pushed.end())
+    {
+        // First report: where the axis rests is not a push.
+        m_gamepad_axis_pushed[key] = magnitude >= PUSHED;
+        return;
+    }
+    if (!it->second && magnitude >= PUSHED)
+    {
+        it->second = true;
+        InputHotplug::onGamepadActivity();
+    }
+    else if (it->second && magnitude <= RELEASED)
+        it->second = false;
+}   // noteGamepadAxis
+
+// -----------------------------------------------------------------------------
 void InputManager::handleJoystick(SDL_Event& event)
 {
     try
@@ -197,6 +224,8 @@ void InputManager::handleJoystick(SDL_Event& event)
         }
         case SDL_JOYAXISMOTION:
         {
+            noteGamepadAxis(event.jaxis.which, event.jaxis.axis,
+                            event.jaxis.value);
             auto& controller = m_sdl_controller.at(event.jaxis.which);
             if (m_mode == INPUT_SENSE_GAMEPAD)
                 controller->handleAxisInputSense(event);
@@ -207,6 +236,8 @@ void InputManager::handleJoystick(SDL_Event& event)
         }
         case SDL_JOYHATMOTION:
         {
+            if (event.jhat.value != SDL_HAT_CENTERED)
+                InputHotplug::onGamepadActivity();
             auto& controller = m_sdl_controller.at(event.jhat.which);
             if (controller->handleHat(event) &&
                 !UserConfigParams::m_gamepad_visualisation)
@@ -216,6 +247,8 @@ void InputManager::handleJoystick(SDL_Event& event)
         case SDL_JOYBUTTONUP:
         case SDL_JOYBUTTONDOWN:
         {
+            if (event.type == SDL_JOYBUTTONDOWN)
+                InputHotplug::onGamepadActivity();
             auto& controller = m_sdl_controller.at(event.jbutton.which);
             if (controller->handleButton(event) &&
                 !UserConfigParams::m_gamepad_visualisation)

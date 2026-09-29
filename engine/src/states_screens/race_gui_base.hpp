@@ -272,6 +272,9 @@ public:
     
     RaceGUIMultitouch* getMultitouchGUI() {return m_multitouch_gui;}
     void recreateGUI();
+    /** Create or tear down the on-screen race controls mid-race, when the
+     *  hardware policy flips (a keyboard was plugged in or pulled out). */
+    void setMultitouchEnabled(bool enabled);
     virtual void initSize();
 
 };   // RaceGUIBase

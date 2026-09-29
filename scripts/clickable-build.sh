@@ -48,6 +48,12 @@ esac
 
 # Build engine into a clean tree (host engine/build may be wrong arch).
 export STK_BUILD_DIR="${ROOT}/engine/cmake-build-click"
+# Keep ccache inside the workspace: CI persists build/ between runs, and the
+# container's home does not survive. ARCH is set by Clickable.
+if command -v ccache >/dev/null 2>&1; then
+    export STK_CCACHE_DIR="${ROOT}/build/ccache-click-${ARCH:-host}"
+    mkdir -p "$STK_CCACHE_DIR"
+fi
 bash scripts/build-engine.sh
 bash scripts/stage-click.sh
 export ARCH="${CLICKABLE_ARCH}"

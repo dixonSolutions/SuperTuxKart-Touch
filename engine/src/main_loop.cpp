@@ -34,6 +34,7 @@
 #include "guiengine/message_queue.hpp"
 #include "guiengine/modaldialog.hpp"
 #include "guiengine/screen_keyboard.hpp"
+#include "input/input_hotplug.hpp"
 #include "input/input_manager.hpp"
 #include "modes/world.hpp"
 #include "modes/profile_world.hpp"
@@ -576,6 +577,7 @@ void MainLoop::run()
 
                 PROFILER_PUSH_CPU_MARKER("Input/GUI", 0x7F, 0x00, 0x00);
                 input_manager->update(frame_duration);
+                InputHotplug::update(frame_duration);
                 GUIEngine::update(frame_duration);
                 PROFILER_POP_CPU_MARKER();
                 if (!m_download_assets)

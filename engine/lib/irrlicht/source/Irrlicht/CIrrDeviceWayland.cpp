@@ -467,6 +467,7 @@ public:
         SEvent event;
         event.EventType = EET_TOUCH_INPUT_EVENT;
         event.TouchInput.Event = ETIE_PRESSED_DOWN;
+        event.TouchInput.Simulated = false;
         event.TouchInput.ID = id;
         event.TouchInput.X = wl_fixed_to_int(x);
         event.TouchInput.Y = wl_fixed_to_int(y);
@@ -491,6 +492,7 @@ public:
         SEvent event;
         event.EventType = EET_TOUCH_INPUT_EVENT;
         event.TouchInput.Event = ETIE_LEFT_UP;
+        event.TouchInput.Simulated = false;
         event.TouchInput.ID = id;
         event.TouchInput.X = 0;
         event.TouchInput.Y = 0;
@@ -514,6 +516,7 @@ public:
         SEvent event;
         event.EventType = EET_TOUCH_INPUT_EVENT;
         event.TouchInput.Event = ETIE_MOVED;
+        event.TouchInput.Simulated = false;
         event.TouchInput.ID = id;
         event.TouchInput.X = wl_fixed_to_int(x);
         event.TouchInput.Y = wl_fixed_to_int(y);

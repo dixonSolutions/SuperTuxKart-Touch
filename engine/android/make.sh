@@ -12,7 +12,11 @@ export SDK_PATH_DEFAULT="$DIRNAME/android-sdk"
 
 export NDK_BUILD_SCRIPT="$DIRNAME/Android.mk"
 
-#export NDK_CCACHE=ccache
+# ndk-build wraps every compiler call in $NDK_CCACHE when it is set. Only
+# opt in when ccache is actually installed, so a bare machine still builds.
+if [ -z "${NDK_CCACHE:-}" ] && command -v ccache >/dev/null 2>&1; then
+    export NDK_CCACHE=ccache
+fi
 export CPU_CORE="-j$(($(nproc) + 1))"
 
 if [ -z "$STK_MIN_ANDROID_SDK" ]; then
@@ -396,6 +400,15 @@ sed -i "s/package org.supertuxkart.*/package $PACKAGE_NAME;/g" \
 
 sed -i "s/\"org.supertuxkart.*INSTALL_STATUS\"/\"$PACKAGE_NAME.INSTALL_STATUS\"/g" \
        "$DIRNAME/src/main/java/STKUpdateChecker.java"
+
+# Every Java source under src/main/java that declares the STK package has to be
+# renamed together. A release or beta build sets PACKAGE_NAME to something other
+# than the literal in the sources, so a file left out here lands in a different
+# package from the rest and the two halves stop seeing each other -- which is a
+# compile error in the release variant only, and invisible in the debug build
+# where the rename is a no-op.
+sed -i "s/package org.supertuxkart.*/package $PACKAGE_NAME;/g" \
+       "$DIRNAME/src/main/java/STKUpdateBridge.java"
 
 sed -i "s/import org.supertuxkart.*/import $PACKAGE_NAME.STKEditText;/g" \
        "$DIRNAME/src/main/java/SuperTuxKartActivity.java"

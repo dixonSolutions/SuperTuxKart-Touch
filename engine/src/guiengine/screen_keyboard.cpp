@@ -21,6 +21,7 @@
 #include "graphics/irr_driver.hpp"
 #include "guiengine/engine.hpp"
 #include "guiengine/screen_keyboard.hpp"
+#include "input/input_hotplug.hpp"
 #include "guiengine/layout_manager.hpp"
 #include "guiengine/widget.hpp"
 #include "guiengine/widgets/button_widget.hpp"
@@ -558,7 +559,28 @@ bool ScreenKeyboard::onEscapePressed()
  */
 bool ScreenKeyboard::shouldUseScreenKeyboard()
 {
-    return UserConfigParams::m_screen_keyboard == 1;
+    if (UserConfigParams::m_screen_keyboard != 1)
+        return false;
+    // Touch mode "Always" (2) means the player asked for the touch UI no
+    // matter what is plugged in.
+    if (UserConfigParams::m_multitouch_active == 2)
+        return true;
+    // Auto: someone who just tapped the text box wants to type with their
+    // fingers, keyboard attached or not; someone driving with the keyboard
+    // has one. latestInput(), because the tap that opens the box is the
+    // event being handled right now.
+    switch (InputHotplug::latestInput())
+    {
+    case InputHotplug::AI_TOUCH:
+        return true;
+    case InputHotplug::AI_KEYBOARD:
+        return false;
+    default:
+        break;
+    }
+    // Otherwise a real keyboard makes the on-screen one redundant -- and it
+    // would sit over the text box. A gamepad player still needs it.
+    return !InputHotplug::hasHardwareKeyboard();
 }
 
 // ----------------------------------------------------------------------------

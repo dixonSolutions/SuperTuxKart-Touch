@@ -34,6 +34,13 @@ fi
 CMAKE_ARGS+=(-DTOUCH_STK_MOBILE_ASSETS=ON)
 
 # Clickable / cross: honour toolchain compilers when set.
+# ccache when present: flatpak-builder --ccache already wraps cc/c++ on PATH,
+# but a Clickable container or a plain host needs asking. STK_CCACHE_DIR
+# lets CI keep the cache inside the workspace it persists.
+if command -v ccache >/dev/null 2>&1 && [ -z "${STK_NO_CCACHE:-}" ]; then
+  CMAKE_ARGS+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+  if [ -n "${STK_CCACHE_DIR:-}" ]; then export CCACHE_DIR="$STK_CCACHE_DIR"; fi
+fi
 if [ -n "${CC:-}" ]; then CMAKE_ARGS+=(-DCMAKE_C_COMPILER="$CC"); fi
 if [ -n "${CXX:-}" ]; then CMAKE_ARGS+=(-DCMAKE_CXX_COMPILER="$CXX"); fi
 
