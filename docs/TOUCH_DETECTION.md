@@ -181,7 +181,7 @@ Every touch and key event is seen first thing in `EventHandler::OnEvent`
 | A finger or stylus down (`SDL_FINGERDOWN` from a direct touch device) | Touch controls shown at once, keyboard attached or not |
 | 4 presses of keys bound in a keyboard config within 2.5 s, no touch, **while a keyboard is listed** | Hidden |
 | 2 gamepad activations within 2.5 s (button, hat, stick past ~75%), **while a gamepad is listed** | Hidden |
-| A keyboard / touchscreen plugged or unplugged | Layer reset; presence decides again |
+| A keyboard / touchscreen / gamepad plugged or unplugged | Layer reset; presence decides again |
 
 Not evidence: touches SDL synthesises from a mouse (`SDL_MOUSE_TOUCHID`) or
 reports from a touchpad (`SDL_TOUCH_DEVICE_INDIRECT_*`, flagged
