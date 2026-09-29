@@ -20,6 +20,7 @@
 #include "guiengine/message_queue.hpp"
 #include "guiengine/screen_keyboard.hpp"
 #include "input/device_manager.hpp"
+#include "input/gamepad_device.hpp"
 #include "input/input_manager.hpp"
 #include "input/input_policy.hpp"
 #include "input/keyboard_config.hpp"
@@ -77,6 +78,7 @@ namespace
     bool g_last_keyboard = false;
     bool g_last_touch = false;
     bool g_last_pointer = false;
+    bool g_last_gamepad = false;
 
     /** The last-input layer: g_active is what the policy uses, g_latest
      *  what the events so far say; update() moves one to the other. */
@@ -176,13 +178,23 @@ namespace
     }
 
     /** A gamepad the system lists: SDL opened it (udev on Linux,
-     *  InputManager on Android) and the device manager holds it. */
+     *  InputManager on Android) and the device manager holds it. An
+     *  unplugged pad stays in that list, marked disconnected, so that its
+     *  configuration and player survive a replug; it is not listed. */
     bool gamepadNow()
     {
         if (!input_manager)
             return false;
         DeviceManager* dm = input_manager->getDeviceManager();
-        return dm && dm->getGamePadAmount() > 0;
+        if (!dm)
+            return false;
+        for (int i = 0; i < dm->getGamePadAmount(); i++)
+        {
+            const GamePadDevice* pad = dm->getGamePad(i);
+            if (pad && pad->isConnected())
+                return true;
+        }
+        return false;
     }
 
     /** Pick up hardware news. \return true when something changed. */
@@ -204,6 +216,11 @@ namespace
         // /proc: a Wayland seat gaining touch, a remote desktop's virtual
         // touchscreen. One array read.
         if (g_initialised && touchNow() != g_last_touch)
+            changed = true;
+        // Gamepads are SDL's to hot-plug, not /proc's, and a pad is the
+        // other device that hides the controls: one going away has to
+        // restart the confirmation layer, or its "in use" outlives it.
+        if (g_initialised && gamepadNow() != g_last_gamepad)
             changed = true;
         return changed;
     }
@@ -231,6 +248,7 @@ namespace
         g_last_keyboard = keyboardNow();
         g_last_touch = touchNow();
         g_last_pointer = pointerNow();
+        g_last_gamepad = gamepadNow();
         g_initialised = true;
     }
 
@@ -353,16 +371,20 @@ namespace
         const bool keyboard = keyboardNow();
         const bool touch = touchNow();
         const bool pointer = pointerNow();
+        const bool gamepad = gamepadNow();
         const bool keyboard_changed = keyboard != g_last_keyboard;
         const bool touch_changed = touch != g_last_touch;
         const bool pointer_changed = pointer != g_last_pointer;
+        const bool gamepad_changed = gamepad != g_last_gamepad;
         g_last_keyboard = keyboard;
         g_last_touch = touch;
         g_last_pointer = pointer;
+        g_last_gamepad = gamepad;
 
         // What was plugged in or out says more than what was used before
-        // it: start the last-input layer over.
-        if (keyboard_changed || touch_changed)
+        // it: start the last-input layer over. A pointer is the exception,
+        // as it never decided anything.
+        if (keyboard_changed || touch_changed || gamepad_changed)
         {
             g_active = g_latest = InputHotplug::AI_NONE;
             g_key_presses.clear();
@@ -371,7 +393,7 @@ namespace
 
         const bool hud_changed = apply();
         if (keyboard_changed || touch_changed || pointer_changed ||
-            hud_changed)
+            gamepad_changed || hud_changed)
         {
 #if defined(STK_LINUX_INPUT_DETECT)
             const LinuxTouchDetect::Snapshot& s = g_monitor.snapshot();
@@ -379,13 +401,13 @@ namespace
                       "keyboard=%d (external=%d) touch=%d pointer=%d "
                       "gamepad=%d tablet_mode=%d -> touch controls %s",
                       keyboard, s.m_external_keyboard, touch, pointer,
-                      gamepadNow(), s.m_tablet_mode,
+                      gamepad, s.m_tablet_mode,
                       irr_driver && irr_driver->isMultitouchEnabled() ? "on"
                                                                        : "off");
 #else
             Log::info("InputHotplug", "keyboard=%d touch=%d pointer=%d "
                       "gamepad=%d -> touch controls %s",
-                      keyboard, touch, pointer, gamepadNow(),
+                      keyboard, touch, pointer, gamepad,
                       irr_driver && irr_driver->isMultitouchEnabled() ? "on"
                                                                        : "off");
 #endif
