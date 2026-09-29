@@ -260,11 +260,16 @@ class MoltenVK;
 		u32 MouseButtonStates;
 
 		u32 Width, Height;
-		std::map<SDL_FingerID, size_t> TouchIDMap;
+		//! Keyed by device and finger: finger ids are only unique per
+		//! device, and a mouse (SDL_MOUSE_TOUCHID, finger 0) and a real
+		//! finger can be down at the same time.
+		typedef std::pair<SDL_TouchID, SDL_FingerID> TouchKey;
+		std::map<TouchKey, size_t> TouchIDMap;
 
 		//! Get a unique touch id per touch, create one if it's a new touch
-		size_t getTouchId(SDL_FingerID touch)
+		size_t getTouchId(SDL_TouchID device, SDL_FingerID finger)
 		{
+			const TouchKey touch(device, finger);
 			auto it = TouchIDMap.find(touch);
 			if (it == TouchIDMap.end())
 			{
@@ -285,9 +290,9 @@ class MoltenVK;
 		}
 
 		//! Remove a unique touch id, free it for future usage
-		void removeTouchId(SDL_FingerID touch)
+		void removeTouchId(SDL_TouchID device, SDL_FingerID finger)
 		{
-			TouchIDMap.erase(touch);
+			TouchIDMap.erase(TouchKey(device, finger));
 		}
 
 		//! Clear all unique touch ids, used when the app out focused

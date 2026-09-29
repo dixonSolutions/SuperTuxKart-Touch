@@ -128,6 +128,7 @@ namespace GUIEngine
 
         static bool shouldUseScreenKeyboard();
         static bool hasSystemScreenKeyboard();
+        static bool useSystemTextInput();
 
         /** Override to be notified of updates */
         virtual void onUpdate(float dt);

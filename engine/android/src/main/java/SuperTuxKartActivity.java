@@ -89,13 +89,18 @@ public class SuperTuxKartActivity extends SDLActivity
     // ------------------------------------------------------------------------
     private native static void pauseRenderingJNI();
     // ------------------------------------------------------------------------
-    /** Tells the game whether a real keyboard is attached, so it can hide or
-     *  show the on-screen race controls without a restart. */
-    private native static void handleHardwareKeyboard(boolean present);
+    /** Tells the game which input devices the system lists (a real
+     *  keyboard, a mouse or touchpad), so it can follow them without a
+     *  restart. */
+    private native static void handleInputPresence(boolean keyboard,
+                                                   boolean pointer);
     // ------------------------------------------------------------------------
+    /** queryInputPresence() bits; the game reads the same values. */
+    private static final int PRESENCE_KEYBOARD = 1;
+    private static final int PRESENCE_POINTER = 2;
     private InputManager.InputDeviceListener m_input_device_listener;
-    private boolean m_hardware_keyboard_reported;
-    private boolean m_hardware_keyboard_known;
+    private int m_presence_reported;
+    private boolean m_presence_known;
     // ------------------------------------------------------------------------
     /** A keyboard someone can type on right now.
      *
@@ -110,9 +115,9 @@ public class SuperTuxKartActivity extends SDLActivity
      *  expose keys (SOURCE_GAMEPAD / SOURCE_JOYSTICK), remotes, styluses and
      *  buttons (non-alphabetic), and uinput / virtual devices that remappers
      *  and fingerprint readers register. A mouse whose receiver also
-     *  exposes a keyboard cannot be told apart from a keyboard here; the
-     *  game's last-input layer covers it (a touch brings the controls
-     *  back). Callable from any thread. */
+     *  exposes a keyboard cannot be told apart from a keyboard here; it is
+     *  listed, so using it hides the touch controls and a touch brings them
+     *  back. Callable from any thread. */
     private boolean hasHardwareKeyboard()
     {
         try
@@ -160,35 +165,92 @@ public class SuperTuxKartActivity extends SDLActivity
         return false;
     }
     // ------------------------------------------------------------------------
-    /** Called by the game thread (JNI) at startup: the listener's first
-     *  report can come before the natives are registered and be lost. */
-    public boolean queryHardwareKeyboard()
+    /** A mouse, trackball or touchpad someone can point with: an enabled,
+     *  non-virtual SOURCE_MOUSE, SOURCE_MOUSE_RELATIVE or SOURCE_TOUCHPAD
+     *  device that is not also the touchscreen or a stylus. Reported to the
+     *  game for its logs and policy; a pointer is never a keyboard and never
+     *  hides the touch controls. Callable from any thread. */
+    private boolean hasPointerDevice()
     {
-        return hasHardwareKeyboard();
+        try
+        {
+            for (int id : InputDevice.getDeviceIds())
+            {
+                InputDevice d = InputDevice.getDevice(id);
+                if (d == null || d.isVirtual())
+                    continue;
+                if (Build.VERSION.SDK_INT >= 27 && !d.isEnabled())
+                    continue;
+                int sources = d.getSources();
+                // Each SOURCE_* is a class bit plus a source bit: test both.
+                boolean pointer =
+                    (sources & InputDevice.SOURCE_MOUSE) ==
+                        InputDevice.SOURCE_MOUSE ||
+                    (sources & InputDevice.SOURCE_TOUCHPAD) ==
+                        InputDevice.SOURCE_TOUCHPAD ||
+                    (Build.VERSION.SDK_INT >= 26 &&
+                     (sources & InputDevice.SOURCE_MOUSE_RELATIVE) ==
+                        InputDevice.SOURCE_MOUSE_RELATIVE);
+                if (!pointer)
+                    continue;
+                if ((sources & InputDevice.SOURCE_TOUCHSCREEN) ==
+                        InputDevice.SOURCE_TOUCHSCREEN ||
+                    (sources & InputDevice.SOURCE_STYLUS) ==
+                        InputDevice.SOURCE_STYLUS)
+                    continue;
+                String name = d.getName();
+                if (name != null)
+                {
+                    String n = name.toLowerCase(java.util.Locale.ROOT);
+                    if (n.contains("virtual") || n.contains("uinput"))
+                        continue;
+                }
+                return true;
+            }
+        }
+        catch (RuntimeException e)
+        {
+            // Never let an input service hiccup take the game down.
+        }
+        return false;
     }
     // ------------------------------------------------------------------------
-    private void reportHardwareKeyboard()
+    private int inputPresence()
     {
-        boolean present = hasHardwareKeyboard();
-        if (m_hardware_keyboard_known && present == m_hardware_keyboard_reported)
+        return (hasHardwareKeyboard() ? PRESENCE_KEYBOARD : 0) |
+               (hasPointerDevice() ? PRESENCE_POINTER : 0);
+    }
+    // ------------------------------------------------------------------------
+    /** Called by the game thread (JNI) at startup: the listener's first
+     *  report can come before the natives are registered and be lost. */
+    public int queryInputPresence()
+    {
+        return inputPresence();
+    }
+    // ------------------------------------------------------------------------
+    private void reportInputPresence()
+    {
+        int presence = inputPresence();
+        if (m_presence_known && presence == m_presence_reported)
             return;
-        m_hardware_keyboard_known = true;
-        m_hardware_keyboard_reported = present;
+        m_presence_known = true;
+        m_presence_reported = presence;
         // Natives are registered by the game thread shortly after start; a
         // report before that has nowhere to go and is repeated on the next
         // device change or resume.
         if (SDLActivity.mSDLThread == null)
         {
-            m_hardware_keyboard_known = false;
+            m_presence_known = false;
             return;
         }
         try
         {
-            handleHardwareKeyboard(present);
+            handleInputPresence((presence & PRESENCE_KEYBOARD) != 0,
+                                (presence & PRESENCE_POINTER) != 0);
         }
         catch (UnsatisfiedLinkError e)
         {
-            m_hardware_keyboard_known = false;
+            m_presence_known = false;
         }
     }
     // ------------------------------------------------------------------------
@@ -200,11 +262,11 @@ public class SuperTuxKartActivity extends SDLActivity
         m_input_device_listener = new InputManager.InputDeviceListener()
         {
             @Override
-            public void onInputDeviceAdded(int id) { reportHardwareKeyboard(); }
+            public void onInputDeviceAdded(int id) { reportInputPresence(); }
             @Override
-            public void onInputDeviceRemoved(int id) { reportHardwareKeyboard(); }
+            public void onInputDeviceRemoved(int id) { reportInputPresence(); }
             @Override
-            public void onInputDeviceChanged(int id) { reportHardwareKeyboard(); }
+            public void onInputDeviceChanged(int id) { reportInputPresence(); }
         };
         im.registerInputDeviceListener(m_input_device_listener,
                                        new Handler(getMainLooper()));
@@ -436,7 +498,7 @@ public class SuperTuxKartActivity extends SDLActivity
     {
         super.onResume();
         m_update_checker.onResume();
-        reportHardwareKeyboard();
+        reportInputPresence();
     }
     // ------------------------------------------------------------------------
     /** A keyboard case folding open or shut arrives as a configuration
@@ -445,7 +507,7 @@ public class SuperTuxKartActivity extends SDLActivity
     public void onConfigurationChanged(Configuration new_config)
     {
         super.onConfigurationChanged(new_config);
-        reportHardwareKeyboard();
+        reportInputPresence();
     }
     // ------------------------------------------------------------------------
     @Override
@@ -490,8 +552,14 @@ public class SuperTuxKartActivity extends SDLActivity
                 m_stk_edittext.setVisibility(View.VISIBLE);
                 m_stk_edittext.requestFocus();
 
-                imm.showSoftInput(m_stk_edittext,
-                    InputMethodManager.SHOW_FORCED);
+                // The edit text carries a hardware keyboard's text too, so
+                // it takes focus either way; the soft keyboard only comes up
+                // when the system lists no keyboard to type on.
+                if (!hasHardwareKeyboard())
+                {
+                    imm.showSoftInput(m_stk_edittext,
+                        InputMethodManager.SHOW_FORCED);
+                }
             }
         });
     }
@@ -565,10 +633,11 @@ public class SuperTuxKartActivity extends SDLActivity
         }
     }
     // ------------------------------------------------------------------------
+    /** Called by STK in JNI. The filtered device list, not
+     *  Configuration.keyboard, which is QWERTY for gamepads and dongles. */
     public boolean isHardwareKeyboardConnected()
     {
-        return getResources().getConfiguration()
-            .keyboard == Configuration.KEYBOARD_QWERTY;
+        return hasHardwareKeyboard();
     }
     // ------------------------------------------------------------------------
     public int getScreenSize()

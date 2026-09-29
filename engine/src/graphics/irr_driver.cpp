@@ -21,6 +21,7 @@
 #include "config/player_manager.hpp"
 #include "config/user_config.hpp"
 #include "input/input_hotplug.hpp"
+#include "input/input_policy.hpp"
 #include "font/bold_face.hpp"
 #include "font/digit_face.hpp"
 #include "font/font_manager.hpp"
@@ -404,37 +405,34 @@ void IrrDriver::createListOfVideoModes()
     }   // for i < video modes count
 }   // createListOfVideoModes
 
-bool IrrDriver::isTouchOnlyDevice() const
-{
-    // Live answer: the watcher re-reads the hardware while the game runs,
-    // so a keyboard that arrives mid-session is seen here at once.
-    return InputHotplug::hasTouchscreen() && !InputHotplug::hasHardwareKeyboard();
-}
-
 bool IrrDriver::isMultitouchEnabled() const
 {
-    if (UserConfigParams::m_multitouch_active == 0)
-        return false;
-    if (UserConfigParams::m_multitouch_active > 1)
-        return true;
-    // Auto: what the player is actually using beats what is plugged in. A
-    // finger on the screen wants the controls even with a keyboard attached;
-    // driving with keys or a gamepad does not want them on a tablet.
+    // Auto shows the controls whenever the system lists a touchscreen. A
+    // keyboard or mouse being plugged in does not put them away; the player
+    // driving with a keyboard or gamepad the system lists does (InputHotplug
+    // only records that for listed devices), and a finger brings them back.
+    InputPolicy::Confirmed confirmed = InputPolicy::CONFIRMED_NONE;
     switch (InputHotplug::activeInput())
     {
     case InputHotplug::AI_TOUCH:
-        return true;
+        confirmed = InputPolicy::CONFIRMED_TOUCH;
+        break;
     case InputHotplug::AI_KEYBOARD:
+        confirmed = InputPolicy::CONFIRMED_KEYBOARD;
+        break;
     case InputHotplug::AI_GAMEPAD:
-        return false;
+        confirmed = InputPolicy::CONFIRMED_GAMEPAD;
+        break;
     default:
         break;
     }
-    if (!m_device || !m_device->supportsTouchDevice())
-        return false;
-    if (UserConfigParams::m_multitouch_touch_only && !isTouchOnlyDevice())
-        return false;
-    return true;
+    const int mode = UserConfigParams::m_multitouch_active;
+    // Only Auto looks at the hardware.
+    const bool touchscreen =
+        mode == 1 && m_device && InputHotplug::hasTouchscreen();
+    return InputPolicy::touchControlsShown(
+        mode, UserConfigParams::m_multitouch_touch_only, touchscreen,
+        confirmed);
 }
 
 // --------------------------------------------------------------------------------------------

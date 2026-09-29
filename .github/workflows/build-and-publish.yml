@@ -39,6 +39,11 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
+  input-presence:
+    name: Input presence tests
+    # Seconds; nothing is published unless the detection rules still hold.
+    uses: ./.github/workflows/input-presence-tests.yml
+
   flatpak:
     name: Flatpak (${{ matrix.arch }})
     needs: [version]
@@ -149,7 +154,7 @@ jobs:
   publish-pages:
     name: Publish Pages (Flatpak + Click remotes)
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    needs: [version, flatpak, click]
+    needs: [version, input-presence, flatpak, click]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -224,7 +229,7 @@ jobs:
   release:
     name: GitHub Release
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    needs: [version, flatpak, click, android]
+    needs: [version, input-presence, flatpak, click, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -329,7 +334,7 @@ jobs:
 
   openstore:
     name: OpenStore upload
-    needs: [version, click]
+    needs: [version, input-presence, click]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:

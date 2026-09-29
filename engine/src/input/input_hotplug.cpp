@@ -21,6 +21,7 @@
 #include "guiengine/screen_keyboard.hpp"
 #include "input/device_manager.hpp"
 #include "input/input_manager.hpp"
+#include "input/input_policy.hpp"
 #include "input/keyboard_config.hpp"
 #include "input/linux_input_monitor.hpp"
 #include "input/linux_touch_detect.hpp"
@@ -67,12 +68,15 @@ namespace
 #endif
 
     /** Android's answer, written by the UI thread and read on the game
-     *  thread. -1 = never told, 0 = no keyboard, 1 = keyboard. */
-    std::atomic<int> g_android_keyboard(-1);
-    int g_android_keyboard_seen = -1;
+     *  thread: -1 = never told, else ANDROID_* bits. */
+    const int ANDROID_KEYBOARD = 1;
+    const int ANDROID_POINTER = 2;
+    std::atomic<int> g_android_presence(-1);
+    int g_android_presence_seen = -1;
 
     bool g_last_keyboard = false;
     bool g_last_touch = false;
+    bool g_last_pointer = false;
 
     /** The last-input layer: g_active is what the policy uses, g_latest
      *  what the events so far say; update() moves one to the other. */
@@ -100,8 +104,9 @@ namespace
 #ifdef ANDROID
     /** Ask the activity directly. Its listener pushes changes, but the
      *  first push can happen before the natives are registered and be
-     *  lost, so the game thread pulls the starting state itself. */
-    int queryAndroidKeyboard()
+     *  lost, so the game thread pulls the starting state itself.
+     *  \return ANDROID_* bits, or -1 when the activity could not say. */
+    int queryAndroidPresence()
     {
         JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
         if (!env)
@@ -113,9 +118,9 @@ namespace
         jclass cls = env->GetObjectClass(activity);
         if (cls)
         {
-            jmethodID mid = env->GetMethodID(cls, "queryHardwareKeyboard", "()Z");
+            jmethodID mid = env->GetMethodID(cls, "queryInputPresence", "()I");
             if (mid)
-                result = env->CallBooleanMethod(activity, mid) ? 1 : 0;
+                result = env->CallIntMethod(activity, mid);
             if (env->ExceptionCheck())
             {
                 env->ExceptionClear();
@@ -131,7 +136,8 @@ namespace
     bool keyboardNow()
     {
 #if defined(ANDROID) || defined(IOS_STK)
-        return g_android_keyboard_seen == 1;
+        return g_android_presence_seen > 0 &&
+               (g_android_presence_seen & ANDROID_KEYBOARD) != 0;
 #elif defined(STK_LINUX_INPUT_DETECT)
         return g_monitor.snapshot().usableKeyboard();
 #else
@@ -154,6 +160,31 @@ namespace
 #endif
     }
 
+    /** A mouse, trackpoint or touchpad the system lists. Only logged and
+     *  reported: a pointer is not a keyboard, and it never hides the touch
+     *  controls -- a convertible has both, and both work at once. */
+    bool pointerNow()
+    {
+#if defined(ANDROID) || defined(IOS_STK)
+        return g_android_presence_seen > 0 &&
+               (g_android_presence_seen & ANDROID_POINTER) != 0;
+#elif defined(STK_LINUX_INPUT_DETECT)
+        return g_monitor.snapshot().m_pointer;
+#else
+        return true;
+#endif
+    }
+
+    /** A gamepad the system lists: SDL opened it (udev on Linux,
+     *  InputManager on Android) and the device manager holds it. */
+    bool gamepadNow()
+    {
+        if (!input_manager)
+            return false;
+        DeviceManager* dm = input_manager->getDeviceManager();
+        return dm && dm->getGamePadAmount() > 0;
+    }
+
     /** Pick up hardware news. \return true when something changed. */
     bool scan(float dt)
     {
@@ -163,12 +194,17 @@ namespace
 #else
         (void)dt;
 #endif
-        const int android = g_android_keyboard.load();
-        if (android >= 0 && android != g_android_keyboard_seen)
+        const int android = g_android_presence.load();
+        if (android >= 0 && android != g_android_presence_seen)
         {
-            g_android_keyboard_seen = android;
+            g_android_presence_seen = android;
             changed = true;
         }
+        // Touchscreens SDL learns of from the platform rather than from
+        // /proc: a Wayland seat gaining touch, a remote desktop's virtual
+        // touchscreen. One array read.
+        if (g_initialised && touchNow() != g_last_touch)
+            changed = true;
         return changed;
     }
 
@@ -180,20 +216,21 @@ namespace
         g_monitor.start();
 #endif
 #ifdef ANDROID
-        if (g_android_keyboard.load() < 0)
+        if (g_android_presence.load() < 0)
         {
-            const int k = queryAndroidKeyboard();
+            const int k = queryAndroidPresence();
             if (k >= 0)
             {
                 // Only fill in if the UI thread has not spoken meanwhile.
                 int expected = -1;
-                g_android_keyboard.compare_exchange_strong(expected, k);
+                g_android_presence.compare_exchange_strong(expected, k);
             }
         }
 #endif
         scan(0.0f);
         g_last_keyboard = keyboardNow();
         g_last_touch = touchNow();
+        g_last_pointer = pointerNow();
         g_initialised = true;
     }
 
@@ -315,10 +352,13 @@ namespace
     {
         const bool keyboard = keyboardNow();
         const bool touch = touchNow();
+        const bool pointer = pointerNow();
         const bool keyboard_changed = keyboard != g_last_keyboard;
         const bool touch_changed = touch != g_last_touch;
+        const bool pointer_changed = pointer != g_last_pointer;
         g_last_keyboard = keyboard;
         g_last_touch = touch;
+        g_last_pointer = pointer;
 
         // What was plugged in or out says more than what was used before
         // it: start the last-input layer over.
@@ -330,19 +370,22 @@ namespace
         }
 
         const bool hud_changed = apply();
-        if (keyboard_changed || touch_changed || hud_changed)
+        if (keyboard_changed || touch_changed || pointer_changed ||
+            hud_changed)
         {
 #if defined(STK_LINUX_INPUT_DETECT)
             const LinuxTouchDetect::Snapshot& s = g_monitor.snapshot();
             Log::info("InputHotplug",
-                      "keyboard=%d (external=%d) touch=%d tablet_mode=%d "
-                      "-> touch controls %s",
-                      keyboard, s.m_external_keyboard, touch, s.m_tablet_mode,
+                      "keyboard=%d (external=%d) touch=%d pointer=%d "
+                      "gamepad=%d tablet_mode=%d -> touch controls %s",
+                      keyboard, s.m_external_keyboard, touch, pointer,
+                      gamepadNow(), s.m_tablet_mode,
                       irr_driver && irr_driver->isMultitouchEnabled() ? "on"
                                                                        : "off");
 #else
-            Log::info("InputHotplug", "keyboard=%d touch=%d -> touch controls %s",
-                      keyboard, touch,
+            Log::info("InputHotplug", "keyboard=%d touch=%d pointer=%d "
+                      "gamepad=%d -> touch controls %s",
+                      keyboard, touch, pointer, gamepadNow(),
                       irr_driver && irr_driver->isMultitouchEnabled() ? "on"
                                                                        : "off");
 #endif
@@ -426,15 +469,18 @@ void InputHotplug::update(float dt)
 #if defined(STK_LINUX_INPUT_DETECT)
         const LinuxTouchDetect::Snapshot& s = g_monitor.snapshot();
         Log::info("InputHotplug",
-                  "startup: keyboard=%d (external=%d) touch=%d tablet_mode=%d "
-                  "tablet_switch=%d watcher=%s -> touch controls %s",
+                  "startup: keyboard=%d (external=%d) touch=%d pointer=%d "
+                  "tablet_mode=%d tablet_switch=%d watcher=%s -> touch "
+                  "controls %s",
                   g_last_keyboard, s.m_external_keyboard, g_last_touch,
-                  s.m_tablet_mode, s.m_has_tablet_switch, g_monitor.backend(),
+                  g_last_pointer, s.m_tablet_mode, s.m_has_tablet_switch,
+                  g_monitor.backend(),
                   irr_driver && irr_driver->isMultitouchEnabled() ? "on" : "off");
 #else
         Log::info("InputHotplug",
-                  "startup: keyboard=%d touch=%d -> touch controls %s",
-                  g_last_keyboard, g_last_touch,
+                  "startup: keyboard=%d touch=%d pointer=%d -> touch "
+                  "controls %s",
+                  g_last_keyboard, g_last_touch, g_last_pointer,
                   irr_driver && irr_driver->isMultitouchEnabled() ? "on" : "off");
 #endif
         // Startup state is not news; just make the HUD agree with it.
@@ -477,10 +523,24 @@ bool InputHotplug::hasTouchscreen()
 }   // hasTouchscreen
 
 // ----------------------------------------------------------------------------
-void InputHotplug::setAndroidHardwareKeyboard(bool present)
+bool InputHotplug::hasPointer()
 {
-    g_android_keyboard.store(present ? 1 : 0);
-}   // setAndroidHardwareKeyboard
+    initialise();
+    return pointerNow();
+}   // hasPointer
+
+// ----------------------------------------------------------------------------
+bool InputHotplug::hasGamepad()
+{
+    return gamepadNow();
+}   // hasGamepad
+
+// ----------------------------------------------------------------------------
+void InputHotplug::setAndroidInputPresence(bool keyboard, bool pointer)
+{
+    g_android_presence.store((keyboard ? ANDROID_KEYBOARD : 0) |
+                             (pointer ? ANDROID_POINTER : 0));
+}   // setAndroidInputPresence
 
 // ----------------------------------------------------------------------------
 void InputHotplug::onInputEvent(const irr::SEvent& event)
@@ -514,17 +574,22 @@ void InputHotplug::onInputEvent(const irr::SEvent& event)
         if (g_keys_down.test(key))
             return;
         g_keys_down.set(key);
-        if (isDrivingKey(key))
+        // Key presses only confirm a keyboard the system lists. Keys from a
+        // device it does not (a remapper, a remote desktop, a gamepad in
+        // keyboard mode, an IME) change nothing.
+        if (isDrivingKey(key) &&
+            InputPolicy::confirmationCounts(keyboardNow()))
             noteDriving(&g_key_presses, KEY_PRESSES_TO_HIDE, AI_KEYBOARD);
     }
-    // Mouse events neither show nor hide the controls: nobody steers a kart
-    // with a mouse, and SDL also makes mouse events up from touches.
+    // Mouse events neither show nor hide the controls: a mouse is not a
+    // keyboard, a convertible has a touchscreen and a touchpad at once, and
+    // SDL also makes mouse events up from touches.
 }   // onInputEvent
 
 // ----------------------------------------------------------------------------
 void InputHotplug::onGamepadActivity()
 {
-    if (!autoMode())
+    if (!autoMode() || !InputPolicy::confirmationCounts(gamepadNow()))
         return;
     noteDriving(&g_pad_activations, PAD_ACTIVATIONS_TO_HIDE, AI_GAMEPAD);
 }   // onGamepadActivity
@@ -534,9 +599,3 @@ InputHotplug::ActiveInput InputHotplug::activeInput()
 {
     return autoMode() ? g_active : AI_NONE;
 }   // activeInput
-
-// ----------------------------------------------------------------------------
-InputHotplug::ActiveInput InputHotplug::latestInput()
-{
-    return autoMode() ? g_latest : AI_NONE;
-}   // latestInput

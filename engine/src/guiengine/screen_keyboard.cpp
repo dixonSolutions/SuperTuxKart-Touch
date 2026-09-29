@@ -22,6 +22,7 @@
 #include "guiengine/engine.hpp"
 #include "guiengine/screen_keyboard.hpp"
 #include "input/input_hotplug.hpp"
+#include "input/input_policy.hpp"
 #include "guiengine/layout_manager.hpp"
 #include "guiengine/widget.hpp"
 #include "guiengine/widgets/button_widget.hpp"
@@ -555,32 +556,34 @@ bool ScreenKeyboard::onEscapePressed()
 }   // onEscapePressed
 
 // ----------------------------------------------------------------------------
-/** A function that determines if (native) screen keyboard should be activated
+/** Whether an on-screen keyboard -- STK's own, or the system's (Android
+ *  IME, the compositor's OSK) -- should come up for a text box.
+ *
+ *  Only without a keyboard the system lists: then fingers need one, and so
+ *  does a player navigating menus with a gamepad (a TV, a couch PC). With a
+ *  listed keyboard it never comes up, whatever was last used or the touch
+ *  mode: the real keyboard is there, and the on-screen one would sit over
+ *  the text box. Mouse use says nothing either way.
  */
 bool ScreenKeyboard::shouldUseScreenKeyboard()
 {
-    if (UserConfigParams::m_screen_keyboard != 1)
-        return false;
-    // Touch mode "Always" (2) means the player asked for the touch UI no
-    // matter what is plugged in.
-    if (UserConfigParams::m_multitouch_active == 2)
-        return true;
-    // Auto: someone who just tapped the text box wants to type with their
-    // fingers, keyboard attached or not; someone driving with the keyboard
-    // has one. latestInput(), because the tap that opens the box is the
-    // event being handled right now.
-    switch (InputHotplug::latestInput())
-    {
-    case InputHotplug::AI_TOUCH:
-        return true;
-    case InputHotplug::AI_KEYBOARD:
-        return false;
-    default:
-        break;
-    }
-    // Otherwise a real keyboard makes the on-screen one redundant -- and it
-    // would sit over the text box. A gamepad player still needs it.
-    return !InputHotplug::hasHardwareKeyboard();
+    return InputPolicy::screenKeyboardWanted(
+        UserConfigParams::m_screen_keyboard == 1,
+        InputHotplug::hasHardwareKeyboard(), InputHotplug::hasTouchscreen(),
+        InputHotplug::hasGamepad());
+}
+
+// ----------------------------------------------------------------------------
+/** Whether text boxes take their text through the system's input method
+ *  (Android's STKEditText). That route also carries a hardware keyboard's
+ *  text, so it is used whether or not the soft keyboard is shown; the
+ *  activity leaves the soft keyboard down while the system lists a
+ *  keyboard.
+ */
+bool ScreenKeyboard::useSystemTextInput()
+{
+    return UserConfigParams::m_screen_keyboard == 1 &&
+           hasSystemScreenKeyboard();
 }
 
 // ----------------------------------------------------------------------------

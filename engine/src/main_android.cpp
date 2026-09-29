@@ -36,7 +36,7 @@ extern "C" JNIEXPORT void JNICALL debugMsg(JNIEnv* env, jclass cls, jstring msg)
 extern "C" JNIEXPORT void JNICALL handlePadding(JNIEnv* env, jclass cls, jboolean val);
 extern "C" JNIEXPORT void JNICALL addDNSSrvRecords(JNIEnv* env, jclass cls, jstring name, jint weight);
 extern "C" JNIEXPORT void JNICALL pauseRenderingJNI(JNIEnv* env, jclass cls);
-extern "C" JNIEXPORT void JNICALL handleHardwareKeyboard(JNIEnv* env, jclass cls, jboolean present);
+extern "C" JNIEXPORT void JNICALL handleInputPresence(JNIEnv* env, jclass cls, jboolean keyboard, jboolean pointer);
 
 extern "C" JNIEXPORT void JNICALL editText2STKEditbox(JNIEnv* env, jclass cls, jint widget_id, jstring text, jint start, jint end, jint composing_start, jint composing_end);
 extern "C" JNIEXPORT void JNICALL handleActionNext(JNIEnv* env, jclass cls, jint widget_id);
@@ -46,11 +46,12 @@ extern "C" JNIEXPORT void JNICALL handleLeftRight(JNIEnv* env, jclass cls, jbool
     #error
 #endif
 
-extern "C" JNIEXPORT void JNICALL handleHardwareKeyboard(JNIEnv* env, jclass cls, jboolean present)
+extern "C" JNIEXPORT void JNICALL handleInputPresence(JNIEnv* env, jclass cls, jboolean keyboard, jboolean pointer)
 {
     // UI thread. The game thread picks this up on its next frame.
-    InputHotplug::setAndroidHardwareKeyboard(present == JNI_TRUE);
-}   // handleHardwareKeyboard
+    InputHotplug::setAndroidInputPresence(keyboard == JNI_TRUE,
+                                          pointer == JNI_TRUE);
+}   // handleInputPresence
 
 void registering_natives()
 {
@@ -60,7 +61,7 @@ void registering_natives()
         { "handlePadding",      "(Z)V", (void*)&handlePadding },
         { "addDNSSrvRecords",   "(Ljava/lang/String;I)V", (void*)&addDNSSrvRecords },
         { "pauseRenderingJNI",   "()V", (void*)&pauseRenderingJNI },
-        { "handleHardwareKeyboard", "(Z)V", (void*)&handleHardwareKeyboard }
+        { "handleInputPresence", "(ZZ)V", (void*)&handleInputPresence }
     };
     JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
     assert(env);
