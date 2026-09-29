@@ -314,7 +314,6 @@ public:
     IrrlichtDevice       *getDevice()       const { return m_device;        }
     /** True when config + hardware say the on-screen race controls should run. */
     bool                  isMultitouchEnabled() const;
-    bool                  isTouchOnlyDevice() const;
     // ------------------------------------------------------------------------
     /** Returns the irrlicht video driver. */
     video::IVideoDriver  *getVideoDriver()  const { return m_video_driver;  }

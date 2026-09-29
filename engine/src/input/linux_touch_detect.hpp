@@ -36,7 +36,8 @@
 #include <unistd.h>
 #endif
 
-/** Touchscreen vs keyboard, read from /proc/bus/input/devices, the
+/** Touchscreen, keyboard and pointer presence, read from
+ *  /proc/bus/input/devices, the
  *  SW_TABLET_MODE switch, the DMI chassis type and Ubuntu Touch markers.
  *
  *  Used by Irrlicht's SDL device (supportsTouchDevice) and by STK's touch
@@ -62,10 +63,15 @@ namespace LinuxTouchDetect
         bool m_tablet_mode;
         /** Whether a tablet-mode switch was found at all. */
         bool m_has_tablet_switch;
+        /** A mouse, trackpoint or touchpad (virtual and gamepad devices
+         *  are ignored). Says nothing about a keyboard, and never turns the
+         *  touch controls off: a convertible has both. */
+        bool m_pointer;
 
         Snapshot()
             : m_touch(false), m_keyboard(false), m_external_keyboard(false),
-              m_tablet_mode(false), m_has_tablet_switch(false)
+              m_tablet_mode(false), m_has_tablet_switch(false),
+              m_pointer(false)
         {
         }
 
@@ -74,7 +80,8 @@ namespace LinuxTouchDetect
             return m_touch == o.m_touch && m_keyboard == o.m_keyboard &&
                    m_external_keyboard == o.m_external_keyboard &&
                    m_tablet_mode == o.m_tablet_mode &&
-                   m_has_tablet_switch == o.m_has_tablet_switch;
+                   m_has_tablet_switch == o.m_has_tablet_switch &&
+                   m_pointer == o.m_pointer;
         }
         bool operator!=(const Snapshot& o) const { return !(*this == o); }
 
@@ -121,6 +128,11 @@ namespace LinuxTouchDetect
     const unsigned KEY_A_BIT = 30;
     const unsigned KEY_Z_BIT = 44;
     const unsigned KEY_SPACE_BIT = 57;
+    const unsigned BTN_LEFT_BIT = 0x110;
+    const unsigned BTN_TOOL_FINGER_BIT = 0x145;
+    const unsigned BTN_TOUCH_BIT = 0x14a;
+    const unsigned REL_X_BIT = 0;
+    const unsigned REL_Y_BIT = 1;
     const unsigned BTN_JOYSTICK_BIT = 0x120;
     const unsigned BTN_GAMEPAD_BIT = 0x130;
     const unsigned ABS_MT_POSITION_X_BIT = 53;
@@ -224,6 +236,7 @@ namespace LinuxTouchDetect
         /** The evdev node from "H: Handlers=", e.g. "event6", or empty. */
         std::string m_event_node;
         std::string m_key;
+        std::string m_rel;
         std::string m_abs;
         std::string m_sw;
 
@@ -290,6 +303,29 @@ namespace LinuxTouchDetect
             if (m_bus != INPUT_BUS_USB_ID && m_bus != INPUT_BUS_BLUETOOTH_ID)
                 return false;
             return !containsI(m_name.c_str(), "type cover");
+        }
+
+        /** A mouse or trackpoint (relative X/Y and a left button), or a
+         *  touchpad (INPUT_PROP_POINTER, which drawing tablets also carry).
+         *  Touchscreens, gamepads and uinput devices (remappers, remote
+         *  desktops, test scripts) are not. */
+        bool isPointer(bool trust_uinput) const
+        {
+            if (isTouchscreen() || isGamepad())
+                return false;
+            if (isUinput() && !trust_uinput)
+                return false;
+            if (containsI(m_name.c_str(), "virtual") ||
+                containsI(m_name.c_str(), "uinput"))
+                return false;
+            const bool mouse = !m_rel.empty() &&
+                bitmapHasBit(m_rel.c_str(), REL_X_BIT) &&
+                bitmapHasBit(m_rel.c_str(), REL_Y_BIT) && hasKey(BTN_LEFT_BIT);
+            if (mouse)
+                return true;
+            return (m_prop & (1u << INPUT_PROP_POINTER_BIT)) &&
+                   (hasKey(BTN_LEFT_BIT) || hasKey(BTN_TOUCH_BIT) ||
+                    hasKey(BTN_TOOL_FINGER_BIT));
         }
 
         bool hasTabletSwitch() const
@@ -379,6 +415,8 @@ namespace LinuxTouchDetect
                 cur.m_prop = (unsigned)std::strtoul(l + 8, NULL, 16);
             else if (std::strncmp(l, "B: KEY=", 7) == 0)
                 cur.m_key = line.substr(7);
+            else if (std::strncmp(l, "B: REL=", 7) == 0)
+                cur.m_rel = line.substr(7);
             else if (std::strncmp(l, "B: ABS=", 7) == 0)
                 cur.m_abs = line.substr(7);
             else if (std::strncmp(l, "B: SW=", 6) == 0)
@@ -622,40 +660,53 @@ namespace LinuxTouchDetect
     }
 
     /** Turn a device list and the switch state into a Snapshot, applying
-     *  what the platform says about built-in keyboards. */
-    inline Snapshot interpret(const std::vector<ProcDevice>& devices,
-                              bool tablet_mode, bool has_switch)
+     *  what the platform says about built-in keyboards. Pure: everything it
+     *  depends on is a parameter, so it can be tested against recorded
+     *  /proc/bus/input/devices listings (engine/tests/input_detect).
+     *  \param chassis SMBIOS chassis type, -1 if unknown. */
+    inline Snapshot interpretWith(const std::vector<ProcDevice>& devices,
+                                  bool tablet_mode, bool has_switch,
+                                  bool trust_uinput, bool ubuntu_touch,
+                                  int chassis)
     {
         Snapshot s;
-        const bool trust = trustUinput();
         for (size_t i = 0; i < devices.size(); i++)
         {
             const ProcDevice& d = devices[i];
             if (d.isTouchscreen())
                 s.m_touch = true;
-            if (d.isKeyboard(trust))
+            if (d.isKeyboard(trust_uinput))
             {
                 s.m_keyboard = true;
                 if (d.isExternal())
                     s.m_external_keyboard = true;
             }
+            if (d.isPointer(trust_uinput))
+                s.m_pointer = true;
         }
         s.m_tablet_mode = tablet_mode;
         s.m_has_tablet_switch = has_switch;
-        if (isUbuntuTouch())
+        if (ubuntu_touch)
         {
             s.m_touch = true;
             // A phone with a keyboard paired is still a keyboard-first
             // device while it is paired; only the built-in assumption goes.
             s.m_keyboard = s.m_external_keyboard;
         }
-        const int chassis = chassisType();
         // SMBIOS: 11 hand held, 30 tablet. Convertibles (31) and
         // detachables (32) are decided by the tablet-mode switch above.
         // A plugged-in keyboard counts on any chassis.
         if ((chassis == 11 || chassis == 30) && s.m_touch)
             s.m_keyboard = s.m_external_keyboard;
         return s;
+    }
+
+    /** interpretWith() for this machine. */
+    inline Snapshot interpret(const std::vector<ProcDevice>& devices,
+                              bool tablet_mode, bool has_switch)
+    {
+        return interpretWith(devices, tablet_mode, has_switch, trustUinput(),
+                             isUbuntuTouch(), chassisType());
     }
 
     /** The last reading, shared by everything in the process. */
@@ -712,6 +763,11 @@ namespace LinuxTouchDetect
     inline bool hasHardwareKeyboard()
     {
         return current().usableKeyboard();
+    }
+
+    inline bool hasPointer()
+    {
+        return current().m_pointer;
     }
 
     inline bool isTouchOnly()

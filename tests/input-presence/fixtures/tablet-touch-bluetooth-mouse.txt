@@ -1,0 +1,19 @@
+I: Bus=0018 Vendor=0000 Product=0000 Version=0111
+N: Name="ELAN9008:00 04F3:2C82"
+P: Phys=
+S: Sysfs=/devices/pci0000:00/0000:00:15.1/i2c_designware.1/i2c-1/i2c-ELAN9008:00/0018:04F3:2C82.0001/input/input3
+U: Uniq=
+H: Handlers=mouse0 event3 
+B: PROP=2
+B: KEY=400 0 0 0 0 0
+B: ABS=261800000000003
+
+I: Bus=0005 Vendor=0000 Product=0000 Version=0111
+N: Name="Logitech MX Anywhere 3"
+P: Phys=
+S: Sysfs=/devices/virtual/misc/uhid/0005:046D:B025.0009/input/input40
+U: Uniq=
+H: Handlers=mouse1 event40 
+B: PROP=0
+B: KEY=1f0000 0 0 0 0
+B: REL=1943

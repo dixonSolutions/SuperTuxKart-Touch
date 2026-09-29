@@ -241,8 +241,7 @@ CGUIEditBox::~CGUIEditBox()
     if (Operator)
         Operator->drop();
 #ifdef ANDROID
-    if (GUIEngine::ScreenKeyboard::shouldUseScreenKeyboard() &&
-        GUIEngine::ScreenKeyboard::hasSystemScreenKeyboard())
+    if (GUIEngine::ScreenKeyboard::useSystemTextInput())
         Android_toggleOnScreenKeyboard(false, 0, 0);
 #elif defined(_IRR_COMPILE_WITH_SDL_DEVICE_)
     if (SDL_IsTextInputActive())
@@ -380,8 +379,7 @@ bool CGUIEditBox::OnEvent(const SEvent& event)
             // If using non touchscreen input in android dismiss text input
             // if out focus because it cannot use emoji keyboard at the same
             // time
-            if (GUIEngine::ScreenKeyboard::shouldUseScreenKeyboard() &&
-                GUIEngine::ScreenKeyboard::hasSystemScreenKeyboard() &&
+            if (GUIEngine::ScreenKeyboard::useSystemTextInput() &&
                 (Android_isHardwareKeyboardConnected() || SDL_IsAndroidTV()))
                 Android_toggleOnScreenKeyboard(false, 0, 0);
 #endif
@@ -396,8 +394,7 @@ bool CGUIEditBox::OnEvent(const SEvent& event)
                 m_mark_begin = m_mark_end = m_cursor_pos = getTextCount();
 #ifdef ANDROID
                 calculateScrollPos();
-                if (GUIEngine::ScreenKeyboard::shouldUseScreenKeyboard() &&
-                    GUIEngine::ScreenKeyboard::hasSystemScreenKeyboard())
+                if (GUIEngine::ScreenKeyboard::useSystemTextInput())
                 {
                     // If user toggle with hacker keyboard with arrows, keep
                     // using only text from STKEditText
@@ -693,8 +690,7 @@ bool CGUIEditBox::processKey(const SEvent& event)
     case IRR_KEY_RETURN:
         {
 #ifdef ANDROID
-            if (GUIEngine::ScreenKeyboard::shouldUseScreenKeyboard() &&
-                GUIEngine::ScreenKeyboard::hasSystemScreenKeyboard())
+            if (GUIEngine::ScreenKeyboard::useSystemTextInput())
                 Android_toggleOnScreenKeyboard(false, 0, 0);
 #endif
             sendGuiEvent( EGET_EDITBOX_ENTER );
@@ -1041,8 +1037,7 @@ void CGUIEditBox::setText(const core::stringw& text)
     m_scroll_pos = 0;
     calculateScrollPos();
 #ifdef ANDROID
-        if (GUIEngine::ScreenKeyboard::shouldUseScreenKeyboard() &&
-            GUIEngine::ScreenKeyboard::hasSystemScreenKeyboard())
+        if (GUIEngine::ScreenKeyboard::useSystemTextInput())
         {
             Android_fromSTKEditBox(getID(), Text, m_mark_begin, m_mark_end, m_type);
         }
@@ -1417,8 +1412,7 @@ void CGUIEditBox::setTextMarkers(s32 begin, s32 end)
         m_mark_end = end;
         sendGuiEvent(EGET_EDITBOX_MARKING_CHANGED);
 #ifdef ANDROID
-        if (GUIEngine::ScreenKeyboard::shouldUseScreenKeyboard() &&
-            GUIEngine::ScreenKeyboard::hasSystemScreenKeyboard())
+        if (GUIEngine::ScreenKeyboard::useSystemTextInput())
         {
             Android_fromSTKEditBox(getID(), Text, m_mark_begin, m_mark_end, m_type);
         }

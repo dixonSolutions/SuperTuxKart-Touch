@@ -542,7 +542,7 @@ namespace UserConfigParams
     PARAM_PREFIX BoolUserConfigParam         m_multitouch_touch_only
             PARAM_DEFAULT( BoolUserConfigParam(false, "multitouch_touch_only",
             &m_multitouch_group,
-            "When multitouch_active is 1 (auto), enable only on touch-only devices (touchscreen and no physical keyboard)"));
+            "When multitouch_active is 1 (auto), hide the touch controls while the player drives with a keyboard or gamepad the system lists; a touch brings them back"));
 
     PARAM_PREFIX BoolUserConfigParam         m_multitouch_draw_gui
             PARAM_DEFAULT( BoolUserConfigParam(false, "multitouch_draw_gui",

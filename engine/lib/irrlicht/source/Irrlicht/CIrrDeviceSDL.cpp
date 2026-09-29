@@ -91,6 +91,15 @@ CIrrDeviceSDL::CIrrDeviceSDL(const SIrrlichtCreationParameters& param)
 
 	// Switch SDL disables this hint by default: https://github.com/devkitPro/SDL/pull/55#issuecomment-633775255
 	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+#if SDL_VERSION_ATLEAST(2, 0, 10)
+	// And the other way round, as Android already does by default: a mouse
+	// click is also a (simulated) touch, so a mouse or touchpad can press
+	// the on-screen race buttons while a finger uses them too. SDL never
+	// turns a touch it made from a mouse back into a mouse event, and
+	// supportsTouchDevice() does not count the "mouse_input" touch device
+	// SDL registers for this.
+	SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+#endif
 
 #ifdef ANDROID
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
@@ -813,9 +822,11 @@ bool CIrrDeviceSDL::run()
 			irrevent.EventType = irr::EET_TOUCH_INPUT_EVENT;
 			irrevent.TouchInput.Event = SDL_event.type == SDL_FINGERMOTION ? irr::ETIE_MOVED :
 				SDL_event.type == SDL_FINGERDOWN ? irr::ETIE_PRESSED_DOWN : irr::ETIE_LEFT_UP;
-			irrevent.TouchInput.ID = getTouchId(SDL_event.tfinger.fingerId);
+			irrevent.TouchInput.ID = getTouchId(SDL_event.tfinger.touchId,
+				SDL_event.tfinger.fingerId);
 			if (SDL_event.type == SDL_FINGERUP)
-				removeTouchId(SDL_event.tfinger.fingerId);
+				removeTouchId(SDL_event.tfinger.touchId,
+					SDL_event.tfinger.fingerId);
 			irrevent.TouchInput.X = SDL_event.tfinger.x * getRealScreenSize().Width;
 			irrevent.TouchInput.Y = SDL_event.tfinger.y * getRealScreenSize().Height;
 			irrevent.TouchInput.Simulated = isSimulatedTouch(SDL_event.tfinger.touchId);
@@ -1555,7 +1566,11 @@ bool CIrrDeviceSDL::isSimulatedTouch(SDL_TouchID touch_id)
 #if SDL_VERSION_ATLEAST(2, 0, 10)
 	if (touch_id == SDL_MOUSE_TOUCHID)
 		return true;
-	if (SDL_GetTouchDeviceType(touch_id) == SDL_TOUCH_DEVICE_INDIRECT_RELATIVE)
+	// A touchpad or trackpad reporting fingers (X11 XInput 2, macOS) is not
+	// the screen being touched.
+	const SDL_TouchDeviceType type = SDL_GetTouchDeviceType(touch_id);
+	if (type == SDL_TOUCH_DEVICE_INDIRECT_RELATIVE ||
+		type == SDL_TOUCH_DEVICE_INDIRECT_ABSOLUTE)
 		return true;
 #endif
 	return false;
@@ -1564,8 +1579,19 @@ bool CIrrDeviceSDL::isSimulatedTouch(SDL_TouchID touch_id)
 
 bool CIrrDeviceSDL::supportsTouchDevice() const
 {
-	if (SDL_GetNumTouchDevices() > 0)
-		return true;
+	// Touchscreens the platform lists. Not SDL's "mouse_input" device (a
+	// mouse, see SDL_HINT_MOUSE_TOUCH_EVENTS) and not touchpads.
+	for (int i = 0; i < SDL_GetNumTouchDevices(); i++)
+	{
+		const SDL_TouchID id = SDL_GetTouchDevice(i);
+#if SDL_VERSION_ATLEAST(2, 0, 10)
+		if (id == SDL_MOUSE_TOUCHID ||
+			SDL_GetTouchDeviceType(id) != SDL_TOUCH_DEVICE_DIRECT)
+			continue;
+#endif
+		if (id != 0)
+			return true;
+	}
 	return LinuxTouchDetect::hasTouchscreen();
 }
 

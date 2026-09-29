@@ -1264,32 +1264,10 @@ EventPropagation InputManager::input(const SEvent& event)
             }
         }
 
-        // Simulate touch events if there is no real device
-        if (UserConfigParams::m_multitouch_active > 1 &&
-            !irr_driver->getDevice()->supportsTouchDevice())
-        {
-            MultitouchDevice* device = m_device_manager->getMultitouchDevice();
-
-            if (device != NULL && (type == EMIE_LMOUSE_PRESSED_DOWN ||
-                type == EMIE_LMOUSE_LEFT_UP || type == EMIE_MOUSE_MOVED))
-            {
-                device->m_events[0].id = 0;
-                device->m_events[0].x = event.MouseInput.X;
-                device->m_events[0].y = event.MouseInput.Y;
-
-                if (type == EMIE_LMOUSE_PRESSED_DOWN)
-                {
-                    device->m_events[0].touched = true;
-                }
-                else if (type == EMIE_LMOUSE_LEFT_UP)
-                {
-                    device->m_events[0].touched = false;
-                }
-
-                m_device_manager->updateMultitouchDevice();
-                device->updateDeviceState(0);
-            }
-        }
+        // The on-screen buttons take mouse clicks as touches that SDL
+        // makes up (SDL_HINT_MOUSE_TOUCH_EVENTS, on for every platform in
+        // CIrrDeviceSDL), whether or not there is a touchscreen, so they
+        // are not simulated here as well.
 
         /*
         EMIE_LMOUSE_PRESSED_DOWN    Left mouse button was pressed down.

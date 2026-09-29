@@ -1,0 +1,26 @@
+name: Input presence tests
+
+# Parses recorded /proc/bus/input/devices listings and checks the touch
+# controls / screen keyboard decisions (scripts/test-input-presence.sh).
+# Seconds, no engine build. main runs it through build-and-publish.yml.
+on:
+  push:
+    branches-ignore: [main, master]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: input-presence-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Input presence (unit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Run input presence tests
+        run: bash scripts/test-input-presence.sh
