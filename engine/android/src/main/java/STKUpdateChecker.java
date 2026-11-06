@@ -159,6 +159,7 @@ public class STKUpdateChecker
                         Thread.currentThread().interrupt();
                         return;
                     }
+                    if (AndySUCompat.present()) publishHost();
                     String request = m_bridge.takeRequest();
                     if (request != null)
                         serveRequest(request);
@@ -178,8 +179,63 @@ public class STKUpdateChecker
         }
     }
 
+    private volatile String m_host_error = "";
+
+    private void serveHostRequest(String request)
+    {
+        try
+        {
+            if (request.equals("auto-on") || request.equals("auto-off"))
+            {
+                boolean enabled = request.equals("auto-on");
+                AndySUCompat.setMode(enabled ? "auto" : "off");
+                setAutoInstall(m_activity, enabled);
+            }
+            else if (request.equals("check")) AndySUCompat.checkNow();
+            else if (request.equals("install")) AndySUCompat.applyNow();
+            else return;
+            m_host_error = "";
+        }
+        catch (ReflectiveOperationException | RuntimeException e)
+        {
+            m_host_error = "Could not contact the updater.";
+            Log.w(TAG, m_host_error, e);
+        }
+        publishHost();
+    }
+
+    private void publishHost()
+    {
+        String installed = AndySUCompat.payloadVersion();
+        if (installed == null) installed = "";
+        String state = "error", latest = "", message = m_host_error;
+        try
+        {
+            JSONObject status = new JSONObject(AndySUCompat.updateStatus());
+            state = status.optString("state", "idle");
+            latest = status.optString("release", status.optString("id", ""));
+            if (state.equals("staged") && !installed.isEmpty() && latest.equals(installed))
+                state = "up_to_date";
+            if (!message.isEmpty() && !state.equals("shell_update") && !state.equals("staged"))
+                state = "error";
+            if (message.isEmpty())
+                message = status.optString("message", status.optString("reason", status.optString("code", "")));
+        }
+        catch (Exception e)
+        {
+            message = "Could not read updater status.";
+            Log.w(TAG, message, e);
+        }
+        m_bridge.publishHost(state, installed, latest, message);
+    }
+
     private void serveRequest(String request)
     {
+        if (AndySUCompat.present())
+        {
+            serveHostRequest(request);
+            return;
+        }
         String installed = installedVersion();
         if (request.equals("auto-on") || request.equals("auto-off"))
         {
@@ -359,6 +415,11 @@ public class STKUpdateChecker
      */
     public void checkInBackground()
     {
+        if (AndySUCompat.present())
+        {
+            publishHost();
+            return;
+        }
         if (!prefs().getBoolean(PREF_ENABLED, true))
             return;
         m_last_check_ms = SystemClock.elapsedRealtime();
@@ -513,21 +574,20 @@ public class STKUpdateChecker
         JSONArray assets = release.optJSONArray("assets");
         if (assets == null)
             return null;
+        // Prefer hosted APKs on supported Android versions for the best ABI.
         for (String abi : Build.SUPPORTED_ABIS)
         {
-            for (int i = 0; i < assets.length(); i++)
+            for (boolean live : new boolean[]{true, false})
             {
-                JSONObject asset = assets.getJSONObject(i);
-                String name = asset.optString("name", "");
-                String url = asset.optString("browser_download_url", "");
-                if (!name.endsWith(".apk") || !name.contains(abi))
-                    continue;
-                if (!isTrustedApkUrl(url))
+                for (int i = 0; i < assets.length(); i++)
                 {
-                    Log.w(TAG, "Ignoring release asset with an untrusted URL: " + url);
-                    continue;
+                    JSONObject asset = assets.getJSONObject(i);
+                    String name = asset.optString("name", "");
+                    String url = asset.optString("browser_download_url", "");
+                    if (ReleaseAsset.matches(name, version, abi, Build.VERSION.SDK_INT, live)
+                            && isTrustedApkUrl(url))
+                        return new Update(version, url, asset.optLong("size", -1));
                 }
-                return new Update(version, url, asset.optLong("size", -1));
             }
         }
         Log.i(TAG, "Release " + version + " has no build for " +
@@ -605,6 +665,7 @@ public class STKUpdateChecker
 
     void onResume()
     {
+        if (AndySUCompat.present()) return;
         if (m_pending_update != null && canInstallPackages())
         {
             startInstall(m_pending_update);
