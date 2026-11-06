@@ -24,3 +24,5 @@ jobs:
           fetch-depth: 1
       - name: Run input presence tests
         run: bash scripts/test-input-presence.sh
+      - name: Run AndySU release tests
+        run: bash scripts/test-andysu-release.sh

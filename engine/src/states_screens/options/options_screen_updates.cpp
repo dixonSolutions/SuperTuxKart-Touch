@@ -24,6 +24,9 @@
 #include "guiengine/widgets/button_widget.hpp"
 #include "guiengine/widgets/check_box_widget.hpp"
 #include "guiengine/widgets/label_widget.hpp"
+#ifdef ANDROID
+#include "guiengine/widgets/icon_button_widget.hpp"
+#endif
 #include "guiengine/widgets/progress_bar_widget.hpp"
 #include "guiengine/widgets/ribbon_widget.hpp"
 #include "states_screens/options/options_common.hpp"
@@ -169,7 +172,13 @@ void OptionsScreenUpdates::refresh()
     // installing an update the player was trying not to.
     const bool managed = !m_status.canSelfInstall();
     const bool busy = m_status.isBusy();
-    const bool actionable = m_status.isBehind();
+    bool actionable = m_status.isBehind();
+#ifdef ANDROID
+    if (m_status.m_host)
+        actionable = m_status.m_state == TouchUpdate::STATE_STAGED ||
+                     m_status.m_state == TouchUpdate::STATE_SHELL_UPDATE ||
+                     m_status.m_state == TouchUpdate::STATE_AVAILABLE;
+#endif
 
     RibbonWidget* actions = getWidget<RibbonWidget>("update_actions");
     if (actions != NULL)
@@ -178,6 +187,16 @@ void OptionsScreenUpdates::refresh()
         setRibbonItemActive(actions, "check_now", !managed && !busy);
         setRibbonItemActive(actions, "install_update", !managed && !busy && actionable);
         setRibbonItemActive(actions, "skip_version", !managed && !busy && actionable);
+#ifdef ANDROID
+        const int skip = actions->findItemNamed("skip_version");
+        const int install = actions->findItemNamed("install_update");
+        if (m_status.m_host)
+        {
+            if (skip >= 0) actions->setItemVisible(skip, false);
+            if (install >= 0)
+                static_cast<IconButtonWidget&>(actions->getRibbonChildren()[install]).setLabel(_("Apply update"));
+        }
+#endif
     }
 
     CheckBoxWidget* automatic = getWidget<CheckBoxWidget>("auto-update");

@@ -363,3 +363,111 @@ jobs:
             exit 1
           fi
           bash scripts/publish-openstore.sh "${CLICKS[@]}"
+
+  andysu-live:
+    name: AndySU live (${{ matrix.abi }})
+    if: github.ref == 'refs/heads/main'
+    needs: [version, android, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            suffix: arm64
+          - abi: armeabi-v7a
+            suffix: arm32
+          - abi: x86_64
+            suffix: x64
+    steps:
+      - name: Check signing key
+        id: signing
+        env:
+          ANDYSU_SIGNING_KEY: ${{ secrets.ANDYSU_SIGNING_KEY }}
+        run: |
+          if [ -n "$ANDYSU_SIGNING_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "AndySU signing key is absent; skipping hosted release."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.signing.outputs.available == 'true'
+      - uses: actions/setup-java@v4
+        if: steps.signing.outputs.available == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        if: steps.signing.outputs.available == 'true'
+        with:
+          name: android-${{ matrix.abi }}
+          path: apk
+      - name: Prepare pinned AndySU and host
+        if: steps.signing.outputs.available == 'true'
+        env:
+          ABI: ${{ matrix.abi }}
+          SUFFIX: ${{ matrix.suffix }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64" && test -n "$ANDROID_KEYSTORE_PASSWORD" && test -n "$ANDROID_KEY_ALIAS"
+          base=https://github.com/dixonSolutions/AndySU/releases/download/v0.1.117
+          curl -fsSL "$base/andysu-x86_64-unknown-linux-musl" -o "$RUNNER_TEMP/andysu"
+          curl -fsSL "$base/andysu-host-template-0.1.117.zip" -o "$RUNNER_TEMP/host-template.zip"
+          chmod +x "$RUNNER_TEMP/andysu"
+          sed "s/channel = \"live-arm64\"/channel = \"live-$SUFFIX\"/" andysu.toml > andysu-abi.toml
+          "$RUNNER_TEMP/andysu" host-config --toml andysu-abi.toml --config-out "$RUNNER_TEMP/config.json" --host-out "$RUNNER_TEMP/host.json"
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          trap 'rm -f "$RUNNER_TEMP/release.keystore"' EXIT
+          shopt -s nullglob
+          apks=(apk/*.apk)
+          test "${#apks[@]}" -eq 1
+          "$RUNNER_TEMP/andysu" split "${apks[0]}" --out split --transparent --abi "$ABI" \
+            --host-template "$RUNNER_TEMP/host-template.zip" --config "$RUNNER_TEMP/config.json" \
+            --keystore "$RUNNER_TEMP/release.keystore" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-alias "$ANDROID_KEY_ALIAS"
+      - name: Refuse to republish an older app release
+        if: steps.signing.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = "$TAG"
+      # The id must equal the version built into the host, or a fresh install takes itself for an
+      # update. Payload releases are immutable, so a re-run skips this step.
+      - name: Check whether this payload is already published
+        if: steps.signing.outputs.available == 'true'
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: andysu-live-${{ matrix.suffix }}-${{ needs.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish signed ABI channel
+        if: steps.signing.outputs.available == 'true' && steps.published.outputs.exists != 'true'
+        uses: dixonSolutions/AndySU/actions/publish@v0.1.117
+        with:
+          payload: split/payload
+          config: andysu-abi.toml
+          signing-key: ${{ secrets.ANDYSU_SIGNING_KEY }}
+          signing-cert: ${{ secrets.ANDYSU_SIGNING_CERT }}
+          version: ${{ needs.version.outputs.version }}
+          pack-args: --no-rename
+          andysu-version: 0.1.117
+      - name: Attach live APK to app release
+        if: steps.signing.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          set -euo pipefail
+          name="SuperTuxKartTouch-live-$VERSION-$SUFFIX.apk"
+          cp split/host.apk "$name"
+          gh release upload "$TAG" "$name" --clobber

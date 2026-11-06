@@ -408,7 +408,9 @@ sed -i "s/\"org.supertuxkart.*INSTALL_STATUS\"/\"$PACKAGE_NAME.INSTALL_STATUS\"/
 # compile error in the release variant only, and invisible in the debug build
 # where the rename is a no-op.
 sed -i "s/package org.supertuxkart.*/package $PACKAGE_NAME;/g" \
-       "$DIRNAME/src/main/java/STKUpdateBridge.java"
+       "$DIRNAME/src/main/java/STKUpdateBridge.java" \
+       "$DIRNAME/src/main/java/AndySUCompat.java" \
+       "$DIRNAME/src/main/java/ReleaseAsset.java"
 
 sed -i "s/import org.supertuxkart.*/import $PACKAGE_NAME.STKEditText;/g" \
        "$DIRNAME/src/main/java/SuperTuxKartActivity.java"

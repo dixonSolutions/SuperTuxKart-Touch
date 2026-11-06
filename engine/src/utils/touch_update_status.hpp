@@ -64,7 +64,10 @@ namespace TouchUpdate
         /** The last check or install failed; m_message says why. */
         STATE_ERROR,
         /** A package manager owns updates here -- show the version, offer no install. */
-        STATE_MANAGED
+        STATE_MANAGED,
+#ifdef ANDROID
+        STATE_STAGED, STATE_APPLYING, STATE_SHELL_UPDATE, STATE_DEFERRED
+#endif
     };
 
     struct Status
@@ -78,10 +81,16 @@ namespace TouchUpdate
         bool        m_auto_update;
         /** False when no platform layer has published anything at all. */
         bool        m_published;
+#ifdef ANDROID
+        bool        m_host;
+#endif
 
         Status()
             : m_state(STATE_IDLE), m_behind(0), m_percent(0),
               m_auto_update(true), m_published(false)
+#ifdef ANDROID
+              , m_host(false)
+#endif
         {
         }
 
@@ -89,7 +98,11 @@ namespace TouchUpdate
         bool isBusy() const
         {
             return m_state == STATE_CHECKING || m_state == STATE_DOWNLOADING ||
-                   m_state == STATE_INSTALLING;
+                   m_state == STATE_INSTALLING
+#ifdef ANDROID
+                   || m_state == STATE_APPLYING
+#endif
+                   ;
         }
 
         /** False where a package manager owns updates and an in-app install

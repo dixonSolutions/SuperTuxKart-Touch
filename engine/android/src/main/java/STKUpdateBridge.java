@@ -106,6 +106,12 @@ public class STKUpdateBridge
         return (token == null || token.isEmpty()) ? null : token;
     }
 
+    /** Publish the host's status through the existing game bridge. */
+    public void publishHost(String state, String installed, String latest, String message)
+    {
+        publish(state, installed, latest, versionsBehind(installed, latest), 0, message);
+    }
+
     public void publishIdle(String installed)
     {
         publish(STATE_IDLE, installed, "", 0, 0, "");
@@ -251,7 +257,8 @@ public class STKUpdateBridge
             .append(Math.max(0, behind)).append('\n')
             .append(Math.max(0, Math.min(100, percent))).append('\n')
             .append(oneLine(message)).append('\n')
-            .append(STKUpdateChecker.isAutoInstall(m_context) ? "on" : "off").append('\n');
+            .append(AndySUCompat.autoEnabled(m_context) ? "on" : "off").append('\n')
+            .append(AndySUCompat.present() ? "host" : "apk").append('\n');
 
         // Write and rename: the game polls this file on its own clock, and a
         // half-written one would be read as a truncated record rather than

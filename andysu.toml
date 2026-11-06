@@ -1,0 +1,13 @@
+app = "io.github.dixonsolutions.supertuxkarttouch"
+host_api = 3
+public_key = "keys/supertuxkart-touch-public.pem"
+
+[remote]
+type = "github"
+repo = "dixonSolutions/SuperTuxKart-Touch"
+channel = "live-arm64"
+
+[policy]
+mode = "auto"
+apply = "next_start"
+watchdog_ms = 45000
