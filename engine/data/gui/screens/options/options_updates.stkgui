@@ -57,10 +57,6 @@
 
                     <spacer width="5" height="3%"/>
 
-                    <label width="90%" height="fit" align="center" I18N="In the update settings" text="Updating" text_align="center"/>
-
-                    <spacer width="5" height="2%"/>
-
                     <div layout="horizontal-row" width="90%" height="fit" align="center">
                         <checkbox id="auto-update"/>
                         <spacer width="1%" height="100%" />

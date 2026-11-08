@@ -39,6 +39,13 @@ namespace
 
     TouchUpdate::State parseState(const std::string& name)
     {
+#ifdef ANDROID
+        if (name == "up_to_date") return TouchUpdate::STATE_UPTODATE;
+        if (name == "staged") return TouchUpdate::STATE_STAGED;
+        if (name == "applying") return TouchUpdate::STATE_APPLYING;
+        if (name == "shell_update") return TouchUpdate::STATE_SHELL_UPDATE;
+        if (name == "deferred") return TouchUpdate::STATE_DEFERRED;
+#endif
         if (name == "checking")         return TouchUpdate::STATE_CHECKING;
         if (name == "uptodate")         return TouchUpdate::STATE_UPTODATE;
         if (name == "available")        return TouchUpdate::STATE_AVAILABLE;
@@ -112,6 +119,11 @@ TouchUpdate::Status TouchUpdate::read()
     std::getline(in, percent);
     std::getline(in, message);
     std::getline(in, auto_pref);
+#ifdef ANDROID
+    std::string kind;
+    std::getline(in, kind);
+    status.m_host = trimLine(kind) == "host";
+#endif
     in.close();
 
     // An unrecognised format means a newer platform layer than this build knows
@@ -166,6 +178,16 @@ irr::core::stringw TouchUpdate::shortStatus(const Status& status)
 {
     switch (status.m_state)
     {
+#ifdef ANDROID
+    case STATE_STAGED:
+        return _("Update ready for next start");
+    case STATE_APPLYING:
+        return _("Applying update...");
+    case STATE_SHELL_UPDATE:
+        return _("App update required");
+    case STATE_DEFERRED:
+        return _("Update deferred");
+#endif
     case STATE_CHECKING:
         return _("Checking for updates...");
     case STATE_DOWNLOADING:
