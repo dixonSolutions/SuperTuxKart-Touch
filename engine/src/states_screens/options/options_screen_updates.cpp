@@ -159,12 +159,14 @@ void OptionsScreenUpdates::refresh()
 
     if (progress != NULL)
     {
+        // Only while something is moving: an empty bar on an up-to-date copy reads as stuck.
+        const bool moving = m_status.m_state == TouchUpdate::STATE_DOWNLOADING ||
+                            m_status.m_state == TouchUpdate::STATE_INSTALLING;
+        progress->setVisible(moving);
         if (m_status.m_state == TouchUpdate::STATE_DOWNLOADING)
             progress->setValue(m_status.m_percent);
         else if (m_status.m_state == TouchUpdate::STATE_INSTALLING)
             progress->setValue(100);
-        else
-            progress->setValue(0);
     }
 
     // Deactivate rather than hide. A control that vanishes mid-gesture hands
